@@ -114,8 +114,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 }
 
 PixelDisplay* pd;
-int m_width = 16 * 8;
-int m_height = 9 * 8;
+int m_width = 32 * 8;
+int m_height = 18 * 8;
 //int xPos, yPos;
 
 //
@@ -133,7 +133,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     switch (message)
     {
     case WM_CREATE:
-      pd = new PixelDisplay(hWnd, m_height, m_width);
+      pd = new PixelDisplay(hWnd, m_width, m_height);
       pd->reset();
       break;
 
@@ -154,11 +154,36 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             }
         }
         break;
-    case WM_LBUTTONUP:
-      //xPos = GET_X_LPARAM(lParam);
-      //yPos = GET_Y_LPARAM(lParam);
-      //InvalidateRect(hWnd, NULL, true);
+
+    case WM_KEYUP:
+        {
+          switch (wParam) {
+          case 'R':
+            pd->stopAnimation();
+            pd->reset();
+            pd->resetLine();
+            pd->invalidate();
+            break;
+          case 'L':
+            pd->addRandomLines(1);
+            break;
+          case 'M':
+            pd->addRandomLines(10);
+            break;
+          case 'S':
+            pd->startAnimation();
+            break;
+          case 'T':
+            pd->stopAnimation();
+            break;
+          }
+        }
+        break;
+
+    case WM_TIMER:
+      if (pd) pd->nextFrame();
       break;
+
     case WM_PAINT:
         {
             PAINTSTRUCT ps;
