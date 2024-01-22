@@ -3,6 +3,8 @@
 #include "windows.h"
 #include "windowsx.h"
 
+#include "Cube.h"
+
 class PixelDisplay
 {
 public:
@@ -39,5 +41,9 @@ private:
   POINT start, end;
   int vs_x, vs_y, ve_x, ve_y;
  
+  // For the spinning cube.
+  Cube cube;
+  int dx, dy, dz;
+
 };
 

@@ -23,6 +23,10 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) {
   end.x = end.y = 0;
   ve_x = ve_y = 0;
 
+  // Start the cube on screen.
+  cube.translate(0, 0, 1000);
+  dx = dy = 0;
+
 }
 
 PixelDisplay::~PixelDisplay() {
@@ -67,6 +71,10 @@ void PixelDisplay::nextFrame()
 {
   moveLine();
   drawLine();
+  dx += 2; dy += 2; dz -= 1;
+  Cube t(cube);
+  t.translate(dx, dy, dz);
+  t.draw(memdc, 100.0, width, height);
   invalidate();
 }
 
@@ -81,6 +89,9 @@ void PixelDisplay::resetLine()
   end.y = 5;
   ve_x = getRandom(5) + 1;
   ve_y = getRandom(5) + 1;
+
+  dx = dy = 0;
+  dz = 0;
 }
 
 void PixelDisplay::moveLine()
