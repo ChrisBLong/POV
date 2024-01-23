@@ -40,6 +40,23 @@ Cube& Cube::translate(double dx, double dy, double dz) {
   return *this;
 }
 
+Cube& Cube::rotate(double rx, double ry, double rz) {
+
+  auto rot = [](double& a, double& b, double angle) {
+    double ta = a * cos(angle) - b * sin(angle);
+    b = a * sin(angle) + b * cos(angle);
+    a = ta;
+    };
+
+  for (auto& v : vertices) {
+    rot(v.x, v.y, rz);
+    rot(v.x, v.z, ry);
+    rot(v.y, v.z, rx);
+  }
+
+  return *this;
+}
+
 void Cube::draw(HDC memdc, double zScreen, int width, int height)
 {
   for (const auto& e : edges) {

@@ -3,6 +3,7 @@
 PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) {
 
   visibleHwnd = hWnd;
+  eraseBackground = false;
   width = w;
   height = h;
 
@@ -17,15 +18,17 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) {
   // No timer currently running.
   timerSet = false;
 
-  // No bouncing line currently exists.
+  // No bouncing line currently shown.
+  lineRunning = false;
   start.x = start.y = 0;
   vs_x = vs_y = 0;
   end.x = end.y = 0;
   ve_x = ve_y = 0;
 
-  // Start the cube on screen.
-  cube.translate(0, 0, 1000);
-  dx = dy = 0;
+  // No cube currently shown.
+  cubeRunning = false;
+  dx = dy = dz = 0;
+  rx = ry = rz = 0;
 
 }
 
@@ -46,7 +49,7 @@ void PixelDisplay::copyToDC(HDC hdc)
   RECT rect;
   GetClientRect(visibleHwnd, &rect);
   StretchBlt(hdc, 0, 0, rect.right, rect.bottom, memdc, 0, 0, width, height, SRCCOPY);
-
+  if (eraseBackground) BitBlt(memdc, 0, 0, width, height, NULL, 0, 0, BLACKNESS);
 }
 
 void PixelDisplay::addRandomLines(int n)
@@ -55,26 +58,37 @@ void PixelDisplay::addRandomLines(int n)
   invalidate();
 }
 
-void PixelDisplay::startAnimation()
+void PixelDisplay::startAnimation(bool animateLine, bool animateCube)
 {
   // Returns non-zero on success.
   if (SetTimer(visibleHwnd, timerId, 16, NULL)) timerSet = true;
-  if (start.x == 0 && start.y == 0) resetLine();
+  if (animateLine) {
+    if (start.x == 0 && start.y == 0) resetLine();
+    lineRunning = true;
+  }
+  if (animateCube) {
+    if (dx == 0 && dy == 0) resetCube();
+    cubeRunning = true;
+  }
 }
 
 void PixelDisplay::stopAnimation()
 {
   if (timerSet) KillTimer(visibleHwnd, timerId);
+  lineRunning = false;
+  cubeRunning = false;
 }
 
 void PixelDisplay::nextFrame()
 {
-  moveLine();
-  drawLine();
-  dx += 2; dy += 2; dz -= 1;
-  Cube t(cube);
-  t.translate(dx, dy, dz);
-  t.draw(memdc, 100.0, width, height);
+  if (lineRunning) {
+    moveLine();
+    drawLine();
+  }
+  if (cubeRunning) {
+    moveCube();
+    drawCube();
+  }
   invalidate();
 }
 
@@ -115,6 +129,36 @@ void PixelDisplay::drawLine()
   MoveToEx(memdc, start.x, start.y, NULL);
   LineTo(memdc, end.x, end.y);
 }
+
+void PixelDisplay::resetCube()
+{
+  dx = dy = 0;
+  dz = 800;
+  rx = ry = rz = 0;
+}
+
+void PixelDisplay::moveCube()
+{
+  rx += 0.04;
+  ry += 0.03;
+  rz += 0.02;
+}
+
+void PixelDisplay::drawCube()
+{
+  Cube t(cube);
+  t.rotate(rx, ry, rz);
+  t.translate(dx, dy, dz);
+  t.draw(memdc, 100.0, width, height);
+}
+
+void PixelDisplay::translateCube(double _x, double _y, double _z)
+{
+  dx += _x;
+  dy += _y;
+  dz += _z;
+}
+
 
 void PixelDisplay::addOneRandomLine() {
   // Draw a line from somewhere on the left of the screen to somewhere on the right,

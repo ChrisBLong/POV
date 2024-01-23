@@ -162,6 +162,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             pd->stopAnimation();
             pd->reset();
             pd->resetLine();
+            pd->resetCube();
             pd->invalidate();
             break;
           case 'L':
@@ -171,10 +172,31 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             pd->addRandomLines(10);
             break;
           case 'S':
-            pd->startAnimation();
+            pd->startAnimation(false, true);
             break;
           case 'T':
             pd->stopAnimation();
+            break;
+          case VK_LEFT:
+            pd->translateCube(-20, 0, 0);
+            break;
+          case VK_RIGHT:
+            pd->translateCube(20, 0, 0);
+            break;
+          case VK_UP:
+            pd->translateCube(0, -20, 0);
+            break;
+          case VK_DOWN:
+            pd->translateCube(0, 20, 0);
+            break;
+          case 'I':
+            pd->translateCube(0, 0, -20);
+            break;
+          case 'O':
+            pd->translateCube(0, 0, 20);
+            break;
+          case 'E':
+            pd->toggleEraseBackground();
             break;
           }
         }
