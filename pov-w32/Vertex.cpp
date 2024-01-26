@@ -12,7 +12,7 @@ Vertex Vertex::project(double zScreen)
   t.x *= zFactor;
   t.y *= zFactor;
 
-  // The z value is irrelevant for the project vertex.
+  // The z value is irrelevant for the projected vertex.
   t.z = 0;
 
   return t;

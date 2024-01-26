@@ -10,6 +10,7 @@
 
 // Global Variables:
 HINSTANCE hInst;                                // current instance
+HWND hwndStatus;                                // The handle of the status bar.
 WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 
@@ -18,6 +19,8 @@ ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+
+void updateStatusBar();
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -107,6 +110,22 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
       return FALSE;
    }
 
+   // Ensure that the common control DLL is loaded.
+   InitCommonControls();
+
+   // Create the status bar.
+   hwndStatus = CreateWindowEx(
+     0,                       // no extended styles
+     STATUSCLASSNAME,         // name of status bar class
+     (PCTSTR)NULL,            // no text when first created
+     SBARS_SIZEGRIP |         // includes a sizing grip
+     WS_CHILD | WS_VISIBLE,   // creates a visible child window
+     0, 0, 0, 0,              // ignores size and position
+     hWnd,                    // handle to parent window
+     (HMENU)123,              // child window identifier
+     hInstance,               // handle to application instance
+     NULL);                   // no window creation data
+
    ShowWindow(hWnd, nCmdShow);
    UpdateWindow(hWnd);
 
@@ -172,10 +191,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             pd->addRandomLines(10);
             break;
           case 'S':
-            pd->startAnimation(false, true);
-            break;
-          case 'T':
-            pd->stopAnimation();
+            pd->toggleAnimation();
+            updateStatusBar();
             break;
           case VK_LEFT:
             pd->translateCube(-20, 0, 0);
@@ -197,6 +214,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             break;
           case 'E':
             pd->toggleEraseBackground();
+            updateStatusBar();
+            break;
+          case 'C':
+            pd->toggleCubeEnabled();
+            updateStatusBar();
+            break;
+          case 'N':
+            pd->toggleLineEnabled();
+            updateStatusBar();
             break;
           }
         }
@@ -206,13 +232,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
       if (pd) pd->nextFrame();
       break;
 
+    case WM_SIZE:
+      SendMessage(hwndStatus, WM_SIZE, 0, 0);
+      break;
+
     case WM_PAINT:
         {
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hWnd, &ps);
 
             // Copy the offscreen DC to our main window.
-            pd->copyToDC(hdc);
+            pd->copyToDC(hdc, hwndStatus);
 
             EndPaint(hWnd, &ps);
         }
@@ -224,6 +254,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         return DefWindowProc(hWnd, message, wParam, lParam);
     }
     return 0;
+}
+
+void updateStatusBar() {
+  SendMessage(hwndStatus, SB_SETTEXT, 0, (LPARAM)pd->getStatusMessage().c_str());
 }
 
 // Message handler for about box.

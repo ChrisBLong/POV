@@ -1,4 +1,5 @@
 #include "PixelDisplay.h"
+#include <sstream>
 
 PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) {
 
@@ -19,6 +20,7 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) {
   timerSet = false;
 
   // No bouncing line currently shown.
+  lineEnabled = true;
   lineRunning = false;
   start.x = start.y = 0;
   vs_x = vs_y = 0;
@@ -26,6 +28,7 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) {
   ve_x = ve_y = 0;
 
   // No cube currently shown.
+  cubeEnabled = true;
   cubeRunning = false;
   dx = dy = dz = 0;
   rx = ry = rz = 0;
@@ -44,11 +47,12 @@ void PixelDisplay::reset()
   SelectObject(memdc, GetStockObject(WHITE_PEN));
 }
 
-void PixelDisplay::copyToDC(HDC hdc)
+void PixelDisplay::copyToDC(HDC hdc, HWND status)
 {
-  RECT rect;
-  GetClientRect(visibleHwnd, &rect);
-  StretchBlt(hdc, 0, 0, rect.right, rect.bottom, memdc, 0, 0, width, height, SRCCOPY);
+  RECT rectMain, rectStatus;
+  GetClientRect(visibleHwnd, &rectMain);
+  GetClientRect(status, &rectStatus);
+  StretchBlt(hdc, 0, 0, rectMain.right, rectMain.bottom-rectStatus.bottom, memdc, 0, 0, width, height, SRCCOPY);
   if (eraseBackground) BitBlt(memdc, 0, 0, width, height, NULL, 0, 0, BLACKNESS);
 }
 
@@ -58,15 +62,15 @@ void PixelDisplay::addRandomLines(int n)
   invalidate();
 }
 
-void PixelDisplay::startAnimation(bool animateLine, bool animateCube)
+void PixelDisplay::startAnimation()
 {
   // Returns non-zero on success.
   if (SetTimer(visibleHwnd, timerId, 16, NULL)) timerSet = true;
-  if (animateLine) {
+  if (lineEnabled) {
     if (start.x == 0 && start.y == 0) resetLine();
     lineRunning = true;
   }
-  if (animateCube) {
+  if (cubeEnabled) {
     if (dx == 0 && dy == 0) resetCube();
     cubeRunning = true;
   }
@@ -75,17 +79,27 @@ void PixelDisplay::startAnimation(bool animateLine, bool animateCube)
 void PixelDisplay::stopAnimation()
 {
   if (timerSet) KillTimer(visibleHwnd, timerId);
+  timerSet = false;
   lineRunning = false;
   cubeRunning = false;
 }
 
+void PixelDisplay::toggleAnimation()
+{
+  if (timerSet) {
+    stopAnimation();
+  } else {
+    startAnimation();
+  }
+}
+
 void PixelDisplay::nextFrame()
 {
-  if (lineRunning) {
+  if (lineEnabled && lineRunning) {
     moveLine();
     drawLine();
   }
-  if (cubeRunning) {
+  if (cubeEnabled && cubeRunning) {
     moveCube();
     drawCube();
   }
@@ -157,6 +171,22 @@ void PixelDisplay::translateCube(double _x, double _y, double _z)
   dx += _x;
   dy += _y;
   dz += _z;
+}
+
+std::wstring PixelDisplay::getStatusMessage()
+{
+  std::wstringstream message;
+  message << L"Animation: ";
+  message << (timerSet ? L"Yes" : L"No");
+  message << L", Background erase?: ";
+  message << (eraseBackground ? L"Yes" : L"No");
+  message << L", Line enabled: ";
+  message << (lineEnabled ? L"Yes" : L"No");
+  message << L", Line running: ";
+  message << (lineRunning ? L"Yes" : L"No");
+  message << L", Cube enabled: ";
+  message << (cubeEnabled ? L"Yes" : L"No");
+  return message.str();
 }
 
 
