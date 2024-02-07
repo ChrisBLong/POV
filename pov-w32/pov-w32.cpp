@@ -224,6 +224,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             pd->toggleLineEnabled();
             updateStatusBar();
             break;
+          case 'T':
+            pd->toggleTextEnabled();
+            updateStatusBar();
+            break;
           }
         }
         break;

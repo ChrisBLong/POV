@@ -40,6 +40,14 @@ public:
   void drawCube();
   void translateCube(double _x, double _y, double _z);
 
+  size_t addLine(std::wstring line);
+  void enableText(bool enable) { textEnabled = enable; };
+  void toggleTextEnabled() { textEnabled = !textEnabled; }
+  void resetText();
+  void moveText();
+  void nextLine();
+  void drawText();
+
   std::wstring getStatusMessage();
 
 private:
@@ -48,9 +56,10 @@ private:
 
   HWND visibleHwnd;
   bool eraseBackground;
-  HDC memdc;
+  HDC memdc, textdc;
   int width;
   int height;
+  int frameCount;
 
   // For animating the bouncing line.
   bool lineEnabled, lineRunning;
@@ -62,6 +71,13 @@ private:
   Cube cube;
   double dx, dy, dz;
   double rx, ry, rz;
+
+  // For the moving text.
+  bool textEnabled, textRunning;
+  POINT textPos, textVelocity;
+  HFONT textFont;
+  std::vector<std::wstring> lines;
+  int textLineIndex;
 
 };
 

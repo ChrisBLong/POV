@@ -7,11 +7,20 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) {
   eraseBackground = false;
   width = w;
   height = h;
+  frameCount = 0;
 
   // Create a memory DC that will receive the drawing.
   memdc = CreateCompatibleDC(GetDC(hWnd));
   HBITMAP hbitmap = CreateCompatibleBitmap(GetDC(hWnd), width, height);
   SelectObject(memdc, hbitmap);
+
+  // Create another memory DC that will receive text from TextOut before
+  // being blitted into the main memory DC memdc. This is necessary because
+  // TextOut doesn't respect the SetROP2 setting so it isn't possible to XOR
+  // the text on to the screen with just TextOut.
+  textdc = CreateCompatibleDC(GetDC(hWnd));
+  HBITMAP hbitmap2 = CreateCompatibleBitmap(GetDC(hWnd), width, height);
+  SelectObject(textdc, hbitmap2);
 
   // Set up basic random number generation.
   srand((unsigned)memdc);
@@ -33,6 +42,17 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) {
   dx = dy = dz = 0;
   rx = ry = rz = 0;
 
+  // No text currently shown.
+  textEnabled = true;
+  textRunning = false;
+  textPos.x = textPos.y = 0;
+  textFont = CreateFont(48, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_DONTCARE, L"System");
+  addLine(L"My");
+  addLine(L"password");
+  addLine(L"is");
+  addLine(L"-redacted-");
+  textLineIndex = 0;
+
 }
 
 PixelDisplay::~PixelDisplay() {
@@ -45,6 +65,12 @@ void PixelDisplay::reset()
   BitBlt(memdc, 0, 0, width, height, NULL, 0, 0, BLACKNESS);
   SetROP2(memdc, R2_NOT);
   SelectObject(memdc, GetStockObject(WHITE_PEN));
+
+  SelectObject(textdc, textFont);
+  SelectObject(textdc, GetStockObject(WHITE_PEN));
+  SetTextColor(textdc, RGB(255, 255, 255));
+  SetTextAlign(textdc, TA_TOP | TA_CENTER);
+  SetBkMode(textdc, TRANSPARENT);
 }
 
 void PixelDisplay::copyToDC(HDC hdc, HWND status)
@@ -52,7 +78,7 @@ void PixelDisplay::copyToDC(HDC hdc, HWND status)
   RECT rectMain, rectStatus;
   GetClientRect(visibleHwnd, &rectMain);
   GetClientRect(status, &rectStatus);
-  StretchBlt(hdc, 0, 0, rectMain.right, rectMain.bottom-rectStatus.bottom, memdc, 0, 0, width, height, SRCCOPY);
+  StretchBlt(hdc, 0, 0, rectMain.right, rectMain.bottom - rectStatus.bottom, memdc, 0, 0, width, height, SRCCOPY);
   if (eraseBackground) BitBlt(memdc, 0, 0, width, height, NULL, 0, 0, BLACKNESS);
 }
 
@@ -73,6 +99,10 @@ void PixelDisplay::startAnimation()
   if (cubeEnabled) {
     if (dx == 0 && dy == 0) resetCube();
     cubeRunning = true;
+  }
+  if (textEnabled) {
+    if (textPos.x == 0 && textPos.y == 0) resetText();
+    textRunning = true;
   }
 }
 
@@ -103,6 +133,11 @@ void PixelDisplay::nextFrame()
     moveCube();
     drawCube();
   }
+  if (textEnabled && textRunning) {
+    moveText();
+    drawText();
+  }
+  frameCount++;
   invalidate();
 }
 
@@ -173,6 +208,53 @@ void PixelDisplay::translateCube(double _x, double _y, double _z)
   dz += _z;
 }
 
+size_t PixelDisplay::addLine(std::wstring line)
+{
+  lines.push_back(line);
+  return lines.size();
+}
+
+void PixelDisplay::resetText()
+{
+  textPos.x = 20;
+  textPos.y = height;
+  textVelocity.x = 0;
+  textVelocity.y = -2;
+}
+
+void PixelDisplay::moveText()
+{
+  // Temporarily removed this - having the text static seems easier to read.
+  //// Update the position of the text based on its speed.
+  //textPos.x += textVelocity.x;
+  //textPos.y += textVelocity.y;
+
+  //// When the text gets to the top, move it back to the bottom and move on to the next line.
+  //if (textPos.y < -20) {
+  //  textPos.y = height;
+  //  textLineIndex++;
+  //  if (textLineIndex == lines.size()) textLineIndex = 0;
+  //}
+}
+
+void PixelDisplay::nextLine() {
+  textLineIndex++;
+  if (textLineIndex == lines.size()) textLineIndex = 0;
+}
+
+void PixelDisplay::drawText()
+{
+  // Draw a few frames of text in the middle of the screen every 60 frames (ie every second).
+  auto mod = frameCount % 60;
+  if (mod > 0 && mod < 5) {
+    BitBlt(textdc, 0, 0, width, height, NULL, 0, 0, BLACKNESS);
+    auto line = lines[textLineIndex].c_str();
+    TextOut(textdc, width / 2, height / 2, line, wcslen(line));
+    BitBlt(memdc, 0, 0, width, height, textdc, 0, 0, SRCINVERT);
+  } else if (mod == 0) nextLine();
+  
+}
+
 std::wstring PixelDisplay::getStatusMessage()
 {
   std::wstringstream message;
@@ -182,10 +264,10 @@ std::wstring PixelDisplay::getStatusMessage()
   message << (eraseBackground ? L"Yes" : L"No");
   message << L", Line enabled: ";
   message << (lineEnabled ? L"Yes" : L"No");
-  message << L", Line running: ";
-  message << (lineRunning ? L"Yes" : L"No");
   message << L", Cube enabled: ";
   message << (cubeEnabled ? L"Yes" : L"No");
+  message << L", Text enabled: ";
+  message << (textEnabled ? L"Yes" : L"No");
   return message.str();
 }
 
