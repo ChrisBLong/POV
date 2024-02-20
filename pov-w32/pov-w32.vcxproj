@@ -129,7 +129,10 @@
   <ItemGroup>
     <ClInclude Include="Cube.h" />
     <ClInclude Include="Edge.h" />
+    <ClInclude Include="Frame.h" />
+    <ClInclude Include="FrameSet.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="OffscreenDC.h" />
     <ClInclude Include="PixelDisplay.h" />
     <ClInclude Include="pov-w32.h" />
     <ClInclude Include="Resource.h" />
@@ -139,6 +142,9 @@
   <ItemGroup>
     <ClCompile Include="Cube.cpp" />
     <ClCompile Include="Edge.cpp" />
+    <ClCompile Include="Frame.cpp" />
+    <ClCompile Include="FrameSet.cpp" />
+    <ClCompile Include="OffscreenDC.cpp" />
     <ClCompile Include="PixelDisplay.cpp" />
     <ClCompile Include="pov-w32.cpp" />
     <ClCompile Include="Vertex.cpp" />

@@ -18,9 +18,12 @@ WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK    ConfigProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
 void updateStatusBar();
+void showConfigDialog(HWND hWnd);
+HWND hwndConfig = NULL;
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -30,7 +33,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
-    // TODO: Place code here.
+    GdiplusStartupInput gdiplusStartupInput;
+    ULONG_PTR           gdiplusToken;
+
+    // Initialize GDI+.
+    GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
 
     // Initialize global strings
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -50,11 +57,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // Main message loop:
     while (GetMessage(&msg, nullptr, 0, 0))
     {
-        if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
+      if (!IsWindow(hwndConfig) || !IsDialogMessage(hwndConfig, &msg)) {
+        if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg)) {
+          TranslateMessage(&msg);
+          DispatchMessage(&msg);
         }
+      }
     }
 
     return (int) msg.wParam;
@@ -133,9 +141,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 }
 
 PixelDisplay* pd;
-int m_width = 32 * 8;
-int m_height = 18 * 8;
-//int xPos, yPos;
+int m_width = 1920 / 4;
+int m_height = 1080 / 4;
 
 //
 //  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)
@@ -176,6 +183,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     case WM_KEYUP:
         {
+          auto delta = pd->getTranslateDelta();
           switch (wParam) {
           case 'R':
             pd->stopAnimation();
@@ -195,22 +203,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             updateStatusBar();
             break;
           case VK_LEFT:
-            pd->translateCube(-20, 0, 0);
+            pd->translateCube(-delta, 0, 0);
             break;
           case VK_RIGHT:
-            pd->translateCube(20, 0, 0);
+            pd->translateCube(delta, 0, 0);
             break;
           case VK_UP:
-            pd->translateCube(0, -20, 0);
+            pd->translateCube(0, -delta, 0);
             break;
           case VK_DOWN:
-            pd->translateCube(0, 20, 0);
+            pd->translateCube(0, delta, 0);
             break;
           case 'I':
-            pd->translateCube(0, 0, -20);
+            pd->translateCube(0, 0, -delta);
             break;
           case 'O':
-            pd->translateCube(0, 0, 20);
+            pd->translateCube(0, 0, delta);
             break;
           case 'E':
             pd->toggleEraseBackground();
@@ -226,6 +234,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             break;
           case 'T':
             pd->toggleTextEnabled();
+            updateStatusBar();
+            break;
+          case 'P':
+            pd->nextPen();
+            updateStatusBar();
+            break;
+          case 'F':
+            showConfigDialog(hWnd);
             updateStatusBar();
             break;
           }
@@ -253,6 +269,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     case WM_DESTROY:
         PostQuitMessage(0);
+        delete pd;
         break;
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
@@ -263,6 +280,80 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 void updateStatusBar() {
   SendMessage(hwndStatus, SB_SETTEXT, 0, (LPARAM)pd->getStatusMessage().c_str());
 }
+
+void showConfigDialog(HWND hWnd) {
+  if (!IsWindow(hwndConfig))
+  {
+    hwndConfig = CreateDialog(NULL, MAKEINTRESOURCE(IDD_CONFIGURATION), hWnd, (DLGPROC)ConfigProc);
+    ShowWindow(hwndConfig, SW_SHOW);
+  }
+}
+
+// Message handler for the configuration dialog.
+INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+  UNREFERENCED_PARAMETER(lParam);
+  switch (message)
+  {
+  case WM_INITDIALOG:
+    // Set up the sliders.
+    SendMessage(GetDlgItem(hDlg, IDC_RESOLUTION), TBM_SETRANGE, TRUE, MAKELPARAM(1, 20));
+    SendMessage(GetDlgItem(hDlg, IDC_RESOLUTION), TBM_SETTICFREQ, 4, 0);
+    SendMessage(GetDlgItem(hDlg, IDC_RESOLUTION), TBM_SETPOS, TRUE, (LPARAM)pd->getPixelRatio());
+
+    SendMessage(GetDlgItem(hDlg, IDC_FRAME_RATE), TBM_SETRANGE, FALSE, MAKELPARAM(1, 60));
+    SendMessage(GetDlgItem(hDlg, IDC_FRAME_RATE), TBM_SETTICFREQ, 3, 0);
+    SendMessage(GetDlgItem(hDlg, IDC_FRAME_RATE), TBM_SETPOS, TRUE, (LPARAM)pd->getFrameRate());
+
+    SendMessage(GetDlgItem(hDlg, IDC_LINE_WIDTH), TBM_SETRANGE, FALSE, MAKELPARAM(0, 30));
+    SendMessage(GetDlgItem(hDlg, IDC_LINE_WIDTH), TBM_SETTICFREQ, 4, 0);
+    SendMessage(GetDlgItem(hDlg, IDC_LINE_WIDTH), TBM_SETPOS, TRUE, (LPARAM)pd->getLineWidth());
+
+    // Set up the check box.
+    Button_SetCheck(GetDlgItem(hDlg, IDC_ERASE_BACKGROUND), pd->getEraseBackground());
+
+    return (INT_PTR)TRUE;
+
+  case WM_HSCROLL:
+    // Which slider sent this?
+    if (lParam == (LPARAM)GetDlgItem(hDlg, IDC_RESOLUTION)) {
+      OutputDebugString(L"Bingo! R\n");
+      int newRatio = SendMessage(GetDlgItem(hDlg, IDC_RESOLUTION), TBM_GETPOS, 0, 0);
+      pd->resizeOffscreenDCs(newRatio);
+    }
+    if (lParam == (LPARAM)GetDlgItem(hDlg, IDC_FRAME_RATE)) {
+      int newRate = SendMessage(GetDlgItem(hDlg, IDC_FRAME_RATE), TBM_GETPOS, 0, 0);
+      pd->setFrameRate(newRate);
+    }
+    if (lParam == (LPARAM)GetDlgItem(hDlg, IDC_LINE_WIDTH)) {
+      int newWidth = SendMessage(GetDlgItem(hDlg, IDC_LINE_WIDTH), TBM_GETPOS, 0, 0);
+      pd->setLineWidth(newWidth);
+    }
+    break;
+
+  case WM_COMMAND:
+    if (HIWORD(wParam) == BN_CLICKED) {
+      if (LOWORD(wParam) == IDC_ERASE_BACKGROUND) {
+        pd->setEraseBackground(Button_GetCheck(GetDlgItem(hDlg, IDC_ERASE_BACKGROUND)));
+        return (INT_PTR)TRUE;
+      }
+    }
+    switch (LOWORD(wParam)) {
+    case IDOK:
+    case IDCANCEL:
+      EndDialog(hDlg, LOWORD(wParam));
+      // Clear the global handle variable to show that we're closing.
+      hwndConfig = NULL;
+      return (INT_PTR)TRUE;
+    case IDC_RESET:
+      pd->reset();
+      return (INT_PTR)TRUE;
+    }
+    break;
+  }
+  return (INT_PTR)FALSE;
+}
+
 
 // Message handler for about box.
 INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)

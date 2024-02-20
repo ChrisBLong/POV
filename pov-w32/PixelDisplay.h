@@ -3,8 +3,16 @@
 #include "windows.h"
 #include "windowsx.h"
 
-#include "Cube.h"
+#include <objidl.h>
+#include <gdiplus.h>
+using namespace Gdiplus;
+
 #include <string>
+#include <math.h>
+
+#include "OffscreenDC.h"
+#include "Cube.h"
+#include "FrameSet.h"
 
 class PixelDisplay
 {
@@ -12,10 +20,25 @@ public:
   PixelDisplay(HWND hWnd, int height, int width);
   ~PixelDisplay();
 
+  void createRainbow(int penWidth);
+  void unweaveRainbow();
+  void setCurrentPen(int i);
+  HPEN nextPen();
+  void setLineWidth(int w);
+  int getLineWidth() { return penWidth; }
+  int getTranslateDelta() { return height / 12; }  // Returns a scaled amount to move the cube on each keypress.
+
   void reset();
+  int getPixelRatio() { return pixelRatio; }
+  void resizeOffscreenDCs(int pixelRatio);
   void invalidate() { InvalidateRect(visibleHwnd, NULL, false); }
   void copyToDC(HDC hdc, HWND status);
+  Image* imageFromMemDc(Image* templateFrame);
+  bool getEraseBackground() { return eraseBackground; }
+  void setEraseBackground(bool _b) { eraseBackground = _b; }
   void toggleEraseBackground() { eraseBackground = !eraseBackground; }
+
+  void processAllFrames();
 
   int getRandom(int max) { return rand() % max; }
 
@@ -23,6 +46,8 @@ public:
   void addRandomLines(int n);
 
   void startAnimation();
+  int getFrameRate() { return frameRateFps; }
+  void setFrameRate(int fps);
   void stopAnimation();
   void toggleAnimation();
   void nextFrame();
@@ -53,13 +78,20 @@ public:
 private:
   const int timerId = 1234;
   bool timerSet;
+  int frameRateFps;
 
   HWND visibleHwnd;
   bool eraseBackground;
-  HDC memdc, textdc;
+  OffscreenDC memdc, textdc;
+  int pixelRatio;
   int width;
   int height;
   int frameCount;
+
+  // Pens.
+  std::vector<HPEN> pens;
+  int currentPenIndex;
+  int penWidth;
 
   // For animating the bouncing line.
   bool lineEnabled, lineRunning;
@@ -78,6 +110,9 @@ private:
   HFONT textFont;
   std::vector<std::wstring> lines;
   int textLineIndex;
+
+  // For Bad Apple.
+  FrameSet frameSet;
 
 };
 
