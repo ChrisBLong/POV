@@ -24,6 +24,8 @@ public:
   void unweaveRainbow();
   void setCurrentPen(int i);
   HPEN nextPen();
+  HPEN prevPen();
+  void fillWindowWithCurrentPen(HWND hdlg, HWND swatch);
   void setLineWidth(int w);
   int getLineWidth() { return penWidth; }
   int getTranslateDelta() { return height / 12; }  // Returns a scaled amount to move the cube on each keypress.
@@ -37,6 +39,10 @@ public:
   bool getEraseBackground() { return eraseBackground; }
   void setEraseBackground(bool _b) { eraseBackground = _b; }
   void toggleEraseBackground() { eraseBackground = !eraseBackground; }
+
+  void printBinaryXORresults();
+  void addBinaryColorrefToStream(std::wstringstream& out, COLORREF col);
+  void testPattern();
 
   void processAllFrames();
 
@@ -53,24 +59,30 @@ public:
   void nextFrame();
 
   void enableLine(bool enable) { lineEnabled = enable; }
+  bool getLineEnabled() { return lineEnabled; }
   void toggleLineEnabled() { lineEnabled = !lineEnabled; }
   void resetLine();
   void moveLine();
   void drawLine();
 
   void enableCube(bool enable) { cubeEnabled = enable; };
+  bool getCubeEnabled() { return cubeEnabled; }
   void toggleCubeEnabled() { cubeEnabled = !cubeEnabled; }
   void resetCube();
   void moveCube();
   void drawCube();
   void translateCube(double _x, double _y, double _z);
 
-  size_t addLine(std::wstring line);
+  void setTextString(wchar_t* t) { textString.assign(t); }
+  const wchar_t* getTextString() { return textString.c_str(); }
   void enableText(bool enable) { textEnabled = enable; };
+  HFONT createScaledFont();
+  bool getTextEnabled() { return textEnabled; }
   void toggleTextEnabled() { textEnabled = !textEnabled; }
+  bool getTextFill() { return textFill; }
+  void setTextFill(bool f) { textFill = f; }
   void resetText();
   void moveText();
-  void nextLine();
   void drawText();
 
   std::wstring getStatusMessage();
@@ -90,6 +102,7 @@ private:
 
   // Pens.
   std::vector<HPEN> pens;
+  std::vector<COLORREF> colours;
   int currentPenIndex;
   int penWidth;
 
@@ -105,11 +118,10 @@ private:
   double rx, ry, rz;
 
   // For the moving text.
-  bool textEnabled, textRunning;
+  bool textEnabled, textRunning, textFill;
   POINT textPos, textVelocity;
   HFONT textFont;
-  std::vector<std::wstring> lines;
-  int textLineIndex;
+  std::wstring textString;
 
   // For Bad Apple.
   FrameSet frameSet;

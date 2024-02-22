@@ -1,5 +1,6 @@
 #include "PixelDisplay.h"
 #include <sstream>
+#include <bitset>
 
 PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) : memdc(hWnd, w, h), textdc(hWnd, w, h), width(w), height(h) {
 
@@ -35,15 +36,12 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) : memdc(hWnd, w, h), textdc(
   resetCube();
 
   // No text currently shown.
-  textEnabled = false;
+  textEnabled = true;
   textRunning = false;
+  textFill = false;
   textPos.x = textPos.y = 0;
-  textFont = CreateFont(48, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_DONTCARE, L"System");
-  addLine(L"My");
-  addLine(L"password");
-  addLine(L"is");
-  addLine(L"-redacted-");
-  textLineIndex = 0;
+  createScaledFont();
+  textString = L"Hello";
 
   // Load the Bad Apple frames.
   //frameSet.loadFrames(L"E:\\Video Editing\\Bad Apple\\frames\\outline-only\\image%04d.png", 6538);
@@ -53,6 +51,7 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) : memdc(hWnd, w, h), textdc(
   // Run through all the frames and save the outputs.
   //processAllFrames();
 
+  //printBinaryXORresults();
 }
 
 PixelDisplay::~PixelDisplay() {
@@ -67,8 +66,10 @@ void PixelDisplay::createRainbow(int penWidth)
 
   // Create some pretty pens.
   for (int i = 0; i < 16; i++) {
-    auto angle = i * 3.14159 / 7;
-    pens.push_back(CreatePen(PS_SOLID, penWidth, RGB(sin(angle) * 255, sin(angle + 1) * 255, sin(angle + 2) * 255)));
+    auto angle = i * 3.14159 / 9;
+    auto colour = RGB(sin(angle) * 255, sin(angle + 1) * 255, sin(angle + 2) * 255);
+    pens.push_back(CreatePen(PS_SOLID, penWidth, colour));
+    colours.push_back(colour);
   }
 }
 
@@ -95,6 +96,28 @@ HPEN PixelDisplay::nextPen()
   return pens[currentPenIndex];
 }
 
+HPEN PixelDisplay::prevPen()
+{
+  currentPenIndex = currentPenIndex - 1;
+  if (currentPenIndex < 0) currentPenIndex = pens.size() - 1;
+  setCurrentPen(currentPenIndex);
+  return pens[currentPenIndex];
+}
+
+void PixelDisplay::fillWindowWithCurrentPen(HWND hdlg, HWND swatch)
+{
+  RECT rect;
+  GetClientRect(swatch, &rect);
+  HDC hdc = GetDCEx(swatch, NULL, DCX_PARENTCLIP);
+  IntersectClipRect(hdc, rect.left, rect.top, rect.right, rect.bottom);
+  SelectObject(hdc, pens[currentPenIndex]);
+  for (int y = 0; y < rect.bottom; y++) {
+    MoveToEx(hdc, 0, y, NULL);
+    LineTo(hdc, rect.right, y);
+  }
+  ReleaseDC(swatch, hdc);
+}
+
 void PixelDisplay::setLineWidth(int w)
 {
   unweaveRainbow();
@@ -110,20 +133,27 @@ void PixelDisplay::reset()
   setCurrentPen(3);
 
   SelectObject(textdc, textFont);
-  //SelectObject(textdc, GetStockObject(WHITE_PEN));
-
-  SetTextColor(textdc, RGB(255, 255, 255));
   SetTextAlign(textdc, TA_TOP | TA_CENTER);
   SetBkMode(textdc, TRANSPARENT);
 }
 
 void PixelDisplay::resizeOffscreenDCs(int pixelRatio)
 {
-  // Calculate the new width and height based on the desktop size and the supplied pixel ratio.
-  width = 1920 / pixelRatio;
-  height = 1080 / pixelRatio;
+  // Calculate the new width and height based on the current monitor's size and the supplied pixel ratio.
+  // It would perhaps make more sense to base this on the actual size of the client area of the window,
+  // I'm not sure why I've done it like this...
+  HMONITOR hm = MonitorFromWindow(visibleHwnd, MONITOR_DEFAULTTOPRIMARY);
+  MONITORINFO mi;
+  mi.cbSize = sizeof(MONITORINFO);
+  GetMonitorInfo(hm, &mi);
+  width = mi.rcWork.right / pixelRatio;
+  height = (mi.rcWork.bottom - 50) / pixelRatio;
+
   memdc.resetSize(width, height);
   textdc.resetSize(width, height);
+  createScaledFont();
+  resetLine();
+  resetText();
   reset();
   // Move the line back to the top left. Could probably scale its current position to match the new
   // screen resolution but let's not overcomplicate things.
@@ -223,12 +253,74 @@ void PixelDisplay::setFrameRate(int fps)
   }
 }
 
+/* 
+  Displays a pattern of crossed lines to show how the colours interact with each other.
+*/
+void PixelDisplay::testPattern()
+{
+  stopAnimation();
+  reset();
+  int strips = pens.size() + 3;
+  int spacingX = width / strips;
+  int spacingY = height / strips;
+
+  int left = spacingX;
+  int right = spacingX * (strips - 1);
+  int top = spacingY;
+  int bottom = spacingY * (strips - 1);
+
+  for (int i = 0; i < pens.size(); i++) {
+    // Draw two lines in each colour.
+    setCurrentPen(i);
+    // Vertical line.
+    MoveToEx(memdc, spacingX * (i + 2), top, NULL);
+    LineTo(memdc, spacingX * (i + 2), bottom);
+    // Horizontal line.
+    MoveToEx(memdc, left, spacingY * (i + 2), NULL);
+    LineTo(memdc, right, spacingY * (i + 2));
+  }
+
+  invalidate();
+}
+
+void PixelDisplay::printBinaryXORresults() {
+  int col1index = 0;
+  for (const auto& col1 : colours) {
+    int col2index = 0;
+    for (const auto& col2 : colours) {
+      auto result = col1 ^ col2;
+      std::wstringstream out;
+      out << L"\tR\tG\tB\n";
+      out << L"Colour " << col1index << "\t";
+      addBinaryColorrefToStream(out, col1);
+      out << L"\n";
+      out << L"Colour " << col2index << "\t";
+      addBinaryColorrefToStream(out, col2);
+      out << L"\n";
+      out << L"Result\t";
+      addBinaryColorrefToStream(out, result);
+      out << L"\n\n";
+      OutputDebugString(out.str().c_str());
+      col2index++;
+    }
+    col1index++;
+  }
+}
+
+void PixelDisplay::addBinaryColorrefToStream(std::wstringstream& out, COLORREF col) {
+  char red = GetRValue(col);
+  char green = GetGValue(col);
+  char blue = GetBValue(col);
+  out << std::bitset<8>(red) << L"\t" << std::bitset<8>(green) << L"\t" << std::bitset<8>(blue);
+}
+
 void PixelDisplay::stopAnimation()
 {
   if (timerSet) KillTimer(visibleHwnd, timerId);
   timerSet = false;
   lineRunning = false;
   cubeRunning = false;
+  textRunning = false;
 }
 
 void PixelDisplay::toggleAnimation()
@@ -267,15 +359,18 @@ void PixelDisplay::nextFrame()
 
 void PixelDisplay::resetLine()
 {
-  start.x = 5;
+  // Starting position and velocities scale with resolution.
+  int fraction = width / 100;
+
+  start.x = fraction;
   start.y = 0;
-  vs_x = getRandom(5) + 1;
-  vs_y = getRandom(5) + 1;
+  vs_x = getRandom(fraction) + 1;
+  vs_y = getRandom(fraction) + 1;
 
   end.x = 0;
   end.y = 5;
-  ve_x = getRandom(5) + 1;
-  ve_y = getRandom(5) + 1;
+  ve_x = getRandom(fraction) + 1;
+  ve_y = getRandom(fraction) + 1;
 }
 
 void PixelDisplay::moveLine()
@@ -331,51 +426,68 @@ void PixelDisplay::translateCube(double _x, double _y, double _z)
   dz += _z;
 }
 
-size_t PixelDisplay::addLine(std::wstring line)
-{
-  lines.push_back(line);
-  return lines.size();
-}
-
 void PixelDisplay::resetText()
 {
-  textPos.x = 20;
-  textPos.y = height;
-  textVelocity.x = 0;
-  textVelocity.y = -2;
+  // Starting position and velocities scale with resolution.
+  int fraction = width / 100;
+
+  textPos.x = fraction;
+  textPos.y = fraction;
+
+  textVelocity.x = getRandom(fraction) + 1;
+  textVelocity.y = getRandom(fraction) + 1;
 }
 
 void PixelDisplay::moveText()
 {
-  // Temporarily removed this - having the text static seems easier to read.
-  //// Update the position of the text based on its speed.
-  //textPos.x += textVelocity.x;
-  //textPos.y += textVelocity.y;
+  // Update the position of the text based on its speed.
+  textPos.x += textVelocity.x;
+  textPos.y += textVelocity.y;
 
-  //// When the text gets to the top, move it back to the bottom and move on to the next line.
-  //if (textPos.y < -20) {
-  //  textPos.y = height;
-  //  textLineIndex++;
-  //  if (textLineIndex == lines.size()) textLineIndex = 0;
-  //}
+  // Bounce the text when it reaches the edge of the window.
+  if (textPos.x < 0) {
+    textPos.x = 0;
+    textVelocity.x = -textVelocity.x;
+  }
+  if (textPos.x > width) {
+    textPos.x = width;
+    textVelocity.x = -textVelocity.x;
+  }
+  if (textPos.y < 0) {
+    textPos.y = 0;
+    textVelocity.y = -textVelocity.y;
+  }
+  if (textPos.y > height) {
+    textPos.y = height;
+    textVelocity.y = -textVelocity.y;
+  }
 }
 
-void PixelDisplay::nextLine() {
-  textLineIndex++;
-  if (textLineIndex == lines.size()) textLineIndex = 0;
+HFONT PixelDisplay::createScaledFont()
+{
+  int fontSizePixels = height / 6;
+  textFont = CreateFont(-fontSizePixels, 0, 0, 0, FW_HEAVY, FALSE, FALSE, FALSE, ANSI_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_DONTCARE, L"Arial Black");
+  HFONT oldFont = (HFONT) SelectObject(textdc, textFont);
+  DeleteObject(oldFont);
+  return textFont;
 }
 
 void PixelDisplay::drawText()
 {
-  // Draw a few frames of text in the middle of the screen every 60 frames (ie every second).
-  auto mod = frameCount % 60;
-  if (mod > 0 && mod < 5) {
-    BitBlt(textdc, 0, 0, width, height, NULL, 0, 0, BLACKNESS);
-    auto line = lines[textLineIndex].c_str();
-    TextOut(textdc, width / 2, height / 2, line, wcslen(line));
-    BitBlt(memdc, 0, 0, width, height, textdc, 0, 0, SRCINVERT);
-  } else if (mod == 0) nextLine();
-  
+  BitBlt(textdc, 0, 0, width, height, NULL, 0, 0, BLACKNESS);
+  auto line = textString.c_str();
+  SelectObject(textdc, pens[currentPenIndex]);
+  SetDCBrushColor(textdc, colours[currentPenIndex]);
+  BeginPath(textdc);
+  TextOut(textdc, textPos.x, textPos.y, line, wcslen(line));
+  EndPath(textdc);
+  if (textFill) {
+    StrokeAndFillPath(textdc);
+  }
+  else {
+    StrokePath(textdc);
+  }
+  BitBlt(memdc, 0, 0, width, height, textdc, 0, 0, SRCINVERT);  
 }
 
 std::wstring PixelDisplay::getStatusMessage()

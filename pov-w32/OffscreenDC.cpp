@@ -16,6 +16,8 @@ void OffscreenDC::createObjects(int _w, int _h) {
   hdc = CreateCompatibleDC(GetDC(sourceWindow));
   hbitmap = CreateCompatibleBitmap(GetDC(sourceWindow), width, height);
   SelectObject(hdc, hbitmap);
+  SelectObject(hdc, GetStockObject(DC_BRUSH));
+
 }
 
 void OffscreenDC::deleteObjects()

@@ -141,8 +141,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 }
 
 PixelDisplay* pd;
-int m_width = 1920 / 4;
-int m_height = 1080 / 4;
+int m_width = 1920 / 5;
+int m_height = 1080 / 5;
 
 //
 //  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)
@@ -309,15 +309,28 @@ INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
     SendMessage(GetDlgItem(hDlg, IDC_LINE_WIDTH), TBM_SETTICFREQ, 4, 0);
     SendMessage(GetDlgItem(hDlg, IDC_LINE_WIDTH), TBM_SETPOS, TRUE, (LPARAM)pd->getLineWidth());
 
-    // Set up the check box.
+    // Set up the check boxes.
     Button_SetCheck(GetDlgItem(hDlg, IDC_ERASE_BACKGROUND), pd->getEraseBackground());
+    Button_SetCheck(GetDlgItem(hDlg, IDC_SHOW_CUBE), pd->getCubeEnabled());
+    Button_SetCheck(GetDlgItem(hDlg, IDC_SHOW_LINE), pd->getLineEnabled());
+    Button_SetCheck(GetDlgItem(hDlg, IDC_SHOW_TEXT), pd->getTextEnabled());
+    Button_SetCheck(GetDlgItem(hDlg, IDC_FILL_TEXT), pd->getTextFill());
 
+    // Populate the text box.
+    Edit_SetText(GetDlgItem(hDlg, IDC_TEXT_STRING), pd->getTextString());
+
+    return (INT_PTR)TRUE;
+
+  case WM_WINDOWPOSCHANGED:
+    // Update the colour swatch. This is done here because this message is sent AFTER the dialog is
+    // shown on screen. Calling fillWindow from WM_INITDIALOG doesn't work because the dialog
+    // hasn't been shown at that point.
+    pd->fillWindowWithCurrentPen(hDlg, GetDlgItem(hDlg, IDC_LINE_COLOUR));
     return (INT_PTR)TRUE;
 
   case WM_HSCROLL:
     // Which slider sent this?
     if (lParam == (LPARAM)GetDlgItem(hDlg, IDC_RESOLUTION)) {
-      OutputDebugString(L"Bingo! R\n");
       int newRatio = SendMessage(GetDlgItem(hDlg, IDC_RESOLUTION), TBM_GETPOS, 0, 0);
       pd->resizeOffscreenDCs(newRatio);
     }
@@ -329,15 +342,47 @@ INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
       int newWidth = SendMessage(GetDlgItem(hDlg, IDC_LINE_WIDTH), TBM_GETPOS, 0, 0);
       pd->setLineWidth(newWidth);
     }
+    updateStatusBar();
     break;
 
   case WM_COMMAND:
     if (HIWORD(wParam) == BN_CLICKED) {
       if (LOWORD(wParam) == IDC_ERASE_BACKGROUND) {
         pd->setEraseBackground(Button_GetCheck(GetDlgItem(hDlg, IDC_ERASE_BACKGROUND)));
+        updateStatusBar();
+        return (INT_PTR)TRUE;
+      }
+      if (LOWORD(wParam) == IDC_SHOW_CUBE) {
+        pd->enableCube(Button_GetCheck(GetDlgItem(hDlg, IDC_SHOW_CUBE)));
+        updateStatusBar();
+        return (INT_PTR)TRUE;
+      }
+      if (LOWORD(wParam) == IDC_SHOW_LINE) {
+        pd->enableLine(Button_GetCheck(GetDlgItem(hDlg, IDC_SHOW_LINE)));
+        updateStatusBar();
+        return (INT_PTR)TRUE;
+      }
+      if (LOWORD(wParam) == IDC_SHOW_TEXT) {
+        pd->enableText(Button_GetCheck(GetDlgItem(hDlg, IDC_SHOW_TEXT)));
+        updateStatusBar();
+        return (INT_PTR)TRUE;
+      }
+      if (LOWORD(wParam) == IDC_FILL_TEXT) {
+        pd->setTextFill(Button_GetCheck(GetDlgItem(hDlg, IDC_FILL_TEXT)));
+        updateStatusBar();
         return (INT_PTR)TRUE;
       }
     }
+
+    if (HIWORD(wParam) == EN_CHANGE) {
+      if (LOWORD(wParam) == IDC_TEXT_STRING) {
+        wchar_t buffer[128];
+        Edit_GetText(GetDlgItem(hDlg, IDC_TEXT_STRING), buffer, sizeof(buffer));
+        pd->setTextString(buffer);
+        return (INT_PTR)TRUE;
+      }
+    }
+
     switch (LOWORD(wParam)) {
     case IDOK:
     case IDCANCEL:
@@ -347,6 +392,35 @@ INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
       return (INT_PTR)TRUE;
     case IDC_RESET:
       pd->reset();
+      updateStatusBar();
+      return (INT_PTR)TRUE;
+    case IDC_TEST_PATTERN:
+      pd->testPattern();
+      updateStatusBar();
+      return (INT_PTR)TRUE;
+    case IDC_START:
+      pd->startAnimation();
+      updateStatusBar();
+      return (INT_PTR)TRUE;
+    case IDC_STOP:
+      pd->stopAnimation();
+      updateStatusBar();
+      return (INT_PTR)TRUE;
+    case IDC_TOGGLE_ANIMATION:
+      pd->toggleAnimation();
+      updateStatusBar();
+      return (INT_PTR)TRUE;
+    case IDC_NEXT_COLOUR:
+      pd->nextPen();
+      // Update the colour swatch.
+      pd->fillWindowWithCurrentPen(hDlg, GetDlgItem(hDlg, IDC_LINE_COLOUR));
+      updateStatusBar();
+      return (INT_PTR)TRUE;
+    case IDC_PREV_COLOUR:
+      pd->prevPen();
+      // Update the colour swatch.
+      pd->fillWindowWithCurrentPen(hDlg, GetDlgItem(hDlg, IDC_LINE_COLOUR));
+      updateStatusBar();
       return (INT_PTR)TRUE;
     }
     break;
