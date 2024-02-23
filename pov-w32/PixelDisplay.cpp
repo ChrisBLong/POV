@@ -15,6 +15,7 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) : memdc(hWnd, w, h), textdc(
   // Create a selection of pens in different colours, one pixel wide.
   penWidth = 0;
   createRainbow(penWidth);
+  setCurrentPen(3);
 
   // Default frame rate.
   frameRateFps = 60;
@@ -51,7 +52,11 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) : memdc(hWnd, w, h), textdc(
   // Run through all the frames and save the outputs.
   //processAllFrames();
 
+  // Prints the RGB values of the selected colours to the debug console.
   //printBinaryXORresults();
+
+  startAnimation();
+
 }
 
 PixelDisplay::~PixelDisplay() {
@@ -130,7 +135,7 @@ void PixelDisplay::reset()
 {
   BitBlt(memdc, 0, 0, width, height, NULL, 0, 0, BLACKNESS);
   SetROP2(memdc, R2_XORPEN);
-  setCurrentPen(3);
+  setCurrentPen(currentPenIndex);
 
   SelectObject(textdc, textFont);
   SetTextAlign(textdc, TA_TOP | TA_CENTER);
@@ -308,10 +313,12 @@ void PixelDisplay::printBinaryXORresults() {
 }
 
 void PixelDisplay::addBinaryColorrefToStream(std::wstringstream& out, COLORREF col) {
-  char red = GetRValue(col);
-  char green = GetGValue(col);
-  char blue = GetBValue(col);
-  out << std::bitset<8>(red) << L"\t" << std::bitset<8>(green) << L"\t" << std::bitset<8>(blue);
+  int red = GetRValue(col);
+  int green = GetGValue(col);
+  int blue = GetBValue(col);
+  out << std::bitset<8>(red) << L" (" << (unsigned int)red << L")\t";
+  out << std::bitset<8>(green) << L" (" << (unsigned int)green << L")\t";
+  out << std::bitset<8>(blue) << L" (" << (unsigned int)blue << L")";
 }
 
 void PixelDisplay::stopAnimation()
@@ -359,8 +366,10 @@ void PixelDisplay::nextFrame()
 
 void PixelDisplay::resetLine()
 {
-  // Starting position and velocities scale with resolution.
+  // Starting position and velocities scale with resolution, but must be greater than zero.
   int fraction = width / 100;
+
+  if (fraction == 0) fraction = 1;
 
   start.x = fraction;
   start.y = 0;
@@ -428,8 +437,10 @@ void PixelDisplay::translateCube(double _x, double _y, double _z)
 
 void PixelDisplay::resetText()
 {
-  // Starting position and velocities scale with resolution.
+  // Starting position and velocities scale with resolution, but must be greater than zero.
   int fraction = width / 100;
+
+  if (fraction == 0) fraction = 1;
 
   textPos.x = fraction;
   textPos.y = fraction;

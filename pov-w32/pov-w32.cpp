@@ -175,6 +175,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case IDM_EXIT:
                 DestroyWindow(hWnd);
                 break;
+            case ID_FILE_CONFIGURATION:
+                showConfigDialog(hWnd);
+                break;
             default:
                 return DefWindowProc(hWnd, message, wParam, lParam);
             }
@@ -333,6 +336,7 @@ INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
     if (lParam == (LPARAM)GetDlgItem(hDlg, IDC_RESOLUTION)) {
       int newRatio = SendMessage(GetDlgItem(hDlg, IDC_RESOLUTION), TBM_GETPOS, 0, 0);
       pd->resizeOffscreenDCs(newRatio);
+      pd->fillWindowWithCurrentPen(hDlg, GetDlgItem(hDlg, IDC_LINE_COLOUR));
     }
     if (lParam == (LPARAM)GetDlgItem(hDlg, IDC_FRAME_RATE)) {
       int newRate = SendMessage(GetDlgItem(hDlg, IDC_FRAME_RATE), TBM_GETPOS, 0, 0);

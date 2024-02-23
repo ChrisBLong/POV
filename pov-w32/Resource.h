@@ -24,7 +24,6 @@
 #define IDC_SHOW_TEXT                   1007
 #define IDC_TEXT_STRING                 1008
 #define IDC_NEXT_COLOUR                 1009
-#define IDC_RESET2                      1010
 #define IDC_TEST_PATTERN                1010
 #define IDC_LINE_COLOUR                 1011
 #define IDC_STOP                        1012
@@ -32,6 +31,7 @@
 #define IDC_TOGGLE_ANIMATION            1014
 #define IDC_PREV_COLOUR                 1015
 #define IDC_FILL_TEXT                   1016
+#define ID_FILE_CONFIGURATION           32771
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -40,7 +40,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        130
-#define _APS_NEXT_COMMAND_VALUE         32771
+#define _APS_NEXT_COMMAND_VALUE         32772
 #define _APS_NEXT_CONTROL_VALUE         1012
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
