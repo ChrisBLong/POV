@@ -11,32 +11,37 @@ using namespace Gdiplus;
 #include <math.h>
 
 #include "OffscreenDC.h"
-#include "Cube.h"
+#include "Object3D.h"
 #include "FrameSet.h"
 
 class PixelDisplay
 {
 public:
-  PixelDisplay(HWND hWnd, int height, int width);
+  PixelDisplay(HWND hWnd, int height, int width, int objFileId);
   ~PixelDisplay();
+
+  HDC getMemDc() { return memdc; }
 
   void createRainbow(int penWidth);
   void unweaveRainbow();
   void setCurrentPen(int i);
+  HPEN getCurrentPen() const { return pens[currentPenIndex]; }
+  COLORREF getCurrentPenColour() const { return colours[currentPenIndex]; }
+  void setCurrentPenColour(COLORREF colour);
   HPEN nextPen();
   HPEN prevPen();
   void fillWindowWithCurrentPen(HWND hdlg, HWND swatch);
   void setLineWidth(int w);
-  int getLineWidth() { return penWidth; }
-  int getTranslateDelta() { return height / 12; }  // Returns a scaled amount to move the cube on each keypress.
+  int getLineWidth() const { return penWidth; }
+  int getTranslateDelta() const { return height / 12; }  // Returns a scaled amount to move the cube on each keypress.
 
   void reset();
-  int getPixelRatio() { return pixelRatio; }
+  int getPixelRatio() const { return pixelRatio; }
   void resizeOffscreenDCs(int pixelRatio);
-  void invalidate() { InvalidateRect(visibleHwnd, NULL, false); }
+  void invalidate() const { InvalidateRect(visibleHwnd, NULL, false); }
   void copyToDC(HDC hdc, HWND status);
   Image* imageFromMemDc(Image* templateFrame);
-  bool getEraseBackground() { return eraseBackground; }
+  bool getEraseBackground() const { return eraseBackground; }
   void setEraseBackground(bool _b) { eraseBackground = _b; }
   void toggleEraseBackground() { eraseBackground = !eraseBackground; }
 
@@ -46,27 +51,37 @@ public:
 
   void processAllFrames();
 
-  int getRandom(int max) { return rand() % max; }
+  int getRandom(int max) const { return rand() % max; }
 
   void addOneRandomLine();
   void addRandomLines(int n);
 
   void startAnimation();
-  int getFrameRate() { return frameRateFps; }
+  int getFrameRate() const { return frameRateFps; }
   void setFrameRate(int fps);
   void stopAnimation();
   void toggleAnimation();
   void nextFrame();
 
   void enableLine(bool enable) { lineEnabled = enable; }
-  bool getLineEnabled() { return lineEnabled; }
+  bool getLineEnabled() const { return lineEnabled; }
   void toggleLineEnabled() { lineEnabled = !lineEnabled; }
   void resetLine();
   void moveLine();
   void drawLine();
 
+  // This part started out with just a 3D cube but now features a variety of objects. References to 'cube'
+  // in the code or comments should now be understood to refer to any of the available 3D objects.
+  std::vector<Object3D>& getObjectList() { return objects; }
+  int getObjectCount() const { return objects.size(); }
+  int getCurrentObjectIndex() const { return currentObjectIndex; }
+  void setCurrentObject(int i);
+  double getRotationSpeed() const { return rotationSpeed; }
+  void setRotationSpeed(double _speed) { rotationSpeed = _speed; }
+  bool getIntegralRotation() const { return integralRotation; }
+  void setIntegralRotation(bool _ir) { integralRotation = _ir; }
   void enableCube(bool enable) { cubeEnabled = enable; };
-  bool getCubeEnabled() { return cubeEnabled; }
+  bool getCubeEnabled() const { return cubeEnabled; }
   void toggleCubeEnabled() { cubeEnabled = !cubeEnabled; }
   void resetCube();
   void moveCube();
@@ -111,11 +126,15 @@ private:
   POINT start, end;
   int vs_x, vs_y, ve_x, ve_y;
  
-  // For the spinning cube.
+  // For the spinning cube/object.
   bool cubeEnabled, cubeRunning;
-  Cube cube;
+  std::vector<Object3D> objects;
+  int currentObjectIndex;
+  Object3D currentObject = Object3D::builtIn(CUBE);
   double dx, dy, dz;
   double rx, ry, rz;
+  double rotationSpeed; // radians per second
+  bool integralRotation;
 
   // For the moving text.
   bool textEnabled, textRunning, textFill;

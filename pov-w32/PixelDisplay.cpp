@@ -1,8 +1,9 @@
 #include "PixelDisplay.h"
 #include <sstream>
 #include <bitset>
+#include <numbers>
 
-PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) : memdc(hWnd, w, h), textdc(hWnd, w, h), width(w), height(h) {
+PixelDisplay::PixelDisplay(HWND hWnd, int w, int h, int objFileId) : memdc(hWnd, w, h), textdc(hWnd, w, h), width(w), height(h) {
 
   visibleHwnd = hWnd;
   pixelRatio = 5;
@@ -15,7 +16,7 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) : memdc(hWnd, w, h), textdc(
   // Create a selection of pens in different colours, one pixel wide.
   penWidth = 0;
   createRainbow(penWidth);
-  setCurrentPen(3);
+  setCurrentPen(0);
 
   // Default frame rate.
   frameRateFps = 60;
@@ -55,6 +56,38 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h) : memdc(hWnd, w, h), textdc(
   // Prints the RGB values of the selected colours to the debug console.
   //printBinaryXORresults();
 
+  // Data for the 3D objects is stored in a resource. Access the resource, convert it to a string and
+  // create a stringstream from it that can be passed to the object loader function.
+  // The source file's extension is .obj3d (instead of the standard .obj for Wavefront files) because
+  // Git and/or Visual Studio seem to treat .obj files as special.
+  std::string objData;
+  HRSRC hRes = FindResource(NULL, MAKEINTRESOURCE(objFileId), L"OBJECT_FILE");
+  if (hRes) {
+    HGLOBAL hMem = LoadResource(NULL, hRes);
+    if (hMem) {
+      DWORD size = SizeofResource(NULL, hRes);
+      char* resText = (char*)LockResource(hMem);
+      objData.assign(resText, size);
+      FreeResource(hMem);
+    }
+  }
+
+  // Convert the char string to a wchar_t string.
+  std::wstring wideObjData(objData.begin(), objData.end());
+
+  // Get a stream based on the string.
+  std::wistringstream objectDataStream(wideObjData);
+
+  // Pass the stream to the loader.
+  objects = Object3D::loadObjFile(objectDataStream);
+
+  // Add two more objects defined directly in the Object3D class source.
+  objects.push_back(Object3D::builtIn(TETRAHEDRON));
+  objects.push_back(Object3D::builtIn(COBRA_MKIII));
+
+  // Start with the cube.
+  setCurrentObject(1);
+
   startAnimation();
 
 }
@@ -69,13 +102,25 @@ void PixelDisplay::createRainbow(int penWidth)
   // Clear any existing pens.
   unweaveRainbow();
 
-  // Create some pretty pens.
-  for (int i = 0; i < 16; i++) {
-    auto angle = i * 3.14159 / 9;
-    auto colour = RGB(sin(angle) * 255, sin(angle + 1) * 255, sin(angle + 2) * 255);
-    pens.push_back(CreatePen(PS_SOLID, penWidth, colour));
-    colours.push_back(colour);
+  //// Create some pretty pens.
+  //for (int i = 0; i < 16; i++) {
+  //  auto angle = i * 3.14159 / 9;
+  //  auto colour = RGB(sin(angle) * 255, sin(angle + 1) * 255, sin(angle + 2) * 255);
+  //  pens.push_back(CreatePen(PS_SOLID, penWidth, colour));
+  //  colours.push_back(colour);
+  //}
+
+  // Per a comment suggestion, try pure RGB, black and white.
+  colours.push_back(RGB(255, 0, 0));
+  colours.push_back(RGB(0, 255, 0));
+  colours.push_back(RGB(0, 0, 255));
+  colours.push_back(RGB(0, 0, 0));
+  colours.push_back(RGB(255, 255, 255));
+
+  for (auto c : colours) {
+    pens.push_back(CreatePen(PS_SOLID, penWidth, c));
   }
+
 }
 
 void PixelDisplay::unweaveRainbow()
@@ -83,8 +128,9 @@ void PixelDisplay::unweaveRainbow()
   // Delete any existing pens.
   for (auto& pen : pens) { if (pen) DeleteObject(pen); }
 
-  // Clear the vector.
+  // Clear the vectors (colours don't need to be deleted).
   pens.clear();
+  colours.clear();
 }
 
 void PixelDisplay::setCurrentPen(int i)
@@ -92,6 +138,18 @@ void PixelDisplay::setCurrentPen(int i)
   if (i < 0 || i >= (int)pens.size()) return;
   currentPenIndex = i;
   SelectObject(memdc, pens[currentPenIndex]);
+}
+
+/*
+* Changes the colour of the current pen by deleting the existing one and creating a new one.
+* Should probably be using GDI+ at this point but we are where we are.
+*/
+void PixelDisplay::setCurrentPenColour(COLORREF colour)
+{
+  colours[currentPenIndex] = colour;
+  DeleteObject(pens[currentPenIndex]);
+  pens[currentPenIndex] = CreatePen(PS_SOLID, penWidth, colour);
+  setCurrentPen(currentPenIndex);
 }
 
 HPEN PixelDisplay::nextPen()
@@ -109,6 +167,10 @@ HPEN PixelDisplay::prevPen()
   return pens[currentPenIndex];
 }
 
+/*
+* Called from the configuration dialog window procedure to display a sample of the currently-selected
+* colour in a small rectangular window.
+*/
 void PixelDisplay::fillWindowWithCurrentPen(HWND hdlg, HWND swatch)
 {
   RECT rect;
@@ -133,6 +195,10 @@ void PixelDisplay::setLineWidth(int w)
 
 void PixelDisplay::reset()
 {
+  // Reset the pens, in case they've been changed by the sliders.
+  unweaveRainbow();
+  createRainbow(penWidth);
+
   BitBlt(memdc, 0, 0, width, height, NULL, 0, 0, BLACKNESS);
   SetROP2(memdc, R2_XORPEN);
   setCurrentPen(currentPenIndex);
@@ -274,7 +340,7 @@ void PixelDisplay::testPattern()
   int top = spacingY;
   int bottom = spacingY * (strips - 1);
 
-  for (int i = 0; i < pens.size(); i++) {
+  for (size_t i = 0; i < pens.size(); i++) {
     // Draw two lines in each colour.
     setCurrentPen(i);
     // Vertical line.
@@ -288,6 +354,11 @@ void PixelDisplay::testPattern()
   invalidate();
 }
 
+/*
+* This function calculates the XOR of each colour with all other colours and writes all the
+* information, tab-delimited, to the console using OutputDebugString. I then copy-pasted the
+* information in to Excel for use in the YouTube video.
+*/
 void PixelDisplay::printBinaryXORresults() {
   int col1index = 0;
   for (const auto& col1 : colours) {
@@ -312,6 +383,10 @@ void PixelDisplay::printBinaryXORresults() {
   }
 }
 
+/*
+* Breaks the supplied colour in to red, green and blue channels, then writes them to 
+* the supplied stream in both binary and decimal.
+*/
 void PixelDisplay::addBinaryColorrefToStream(std::wstringstream& out, COLORREF col) {
   int red = GetRValue(col);
   int green = GetGValue(col);
@@ -321,13 +396,18 @@ void PixelDisplay::addBinaryColorrefToStream(std::wstringstream& out, COLORREF c
   out << std::bitset<8>(blue) << L" (" << (unsigned int)blue << L")";
 }
 
+/*
+* Stop the on-screen animation by cancelling the timer, if one is currently set.
+* The 'lineRunning' etc flags don't seem necessary any more, I can't remember why
+* I added them in the first place.
+*/
 void PixelDisplay::stopAnimation()
 {
   if (timerSet) KillTimer(visibleHwnd, timerId);
   timerSet = false;
-  lineRunning = false;
-  cubeRunning = false;
-  textRunning = false;
+  //lineRunning = false;
+  //cubeRunning = false;
+  //textRunning = false;
 }
 
 void PixelDisplay::toggleAnimation()
@@ -404,23 +484,46 @@ void PixelDisplay::drawLine()
   LineTo(memdc, end.x, end.y);
 }
 
+/*
+* Updates the current object being drawn on-screen.
+*/
+void PixelDisplay::setCurrentObject(int i)
+{
+  if (i < 0 || i > getObjectCount()) return;
+  currentObjectIndex = i;
+  currentObject = objects[i];
+}
+
 void PixelDisplay::resetCube()
 {
   dx = dy = 0;
   dz = height * 2;
   rx = ry = rz = 0;
+  rotationSpeed = 1.2;
+  integralRotation = false;
 }
 
 void PixelDisplay::moveCube()
 {
-  rx += 0.04;
-  ry += 0.03;
-  rz += 0.02;
+  auto delta = rotationSpeed / frameRateFps;
+
+  if (integralRotation) {
+    // Adjust delta so that the rotations will get back to as close to zero as possible after
+    // a full rotation, which will result in the nice 'undoing' effect.
+    constexpr auto twoPi = 2.0 * std::numbers::pi;
+    auto framesPerFullRotation = (int)(twoPi / delta);
+    delta = twoPi / framesPerFullRotation;
+  }
+
+  rx += delta;
+  ry += delta;
+  rz += delta;
+
 }
 
 void PixelDisplay::drawCube()
 {
-  Cube t(cube);
+  Object3D t(currentObject);
   t.rotate(rx, ry, rz);
   t.translate(dx, dy, dz);
   // Second parameter is the distance from the viewer's eye to the virtual screen used in the projection function.
