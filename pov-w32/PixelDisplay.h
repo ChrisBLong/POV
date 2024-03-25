@@ -14,6 +14,10 @@ using namespace Gdiplus;
 #include "Object3D.h"
 #include "FrameSet.h"
 
+// For the OKLab color space.
+struct csLab { float L; float a; float b; };
+struct csRGB { float r; float g; float b; };
+
 class PixelDisplay
 {
 public:
@@ -80,6 +84,8 @@ public:
   void setRotationSpeed(double _speed) { rotationSpeed = _speed; }
   bool getIntegralRotation() const { return integralRotation; }
   void setIntegralRotation(bool _ir) { integralRotation = _ir; }
+  bool getWireframe() const { return wireframe; }
+  void setWireframe(bool _wf) { wireframe = _wf; }
   void enableCube(bool enable) { cubeEnabled = enable; };
   bool getCubeEnabled() const { return cubeEnabled; }
   void toggleCubeEnabled() { cubeEnabled = !cubeEnabled; }
@@ -92,15 +98,32 @@ public:
   const wchar_t* getTextString() { return textString.c_str(); }
   void enableText(bool enable) { textEnabled = enable; };
   HFONT createScaledFont();
-  bool getTextEnabled() { return textEnabled; }
+  bool getTextEnabled() const { return textEnabled; }
   void toggleTextEnabled() { textEnabled = !textEnabled; }
-  bool getTextFill() { return textFill; }
+  bool getTextFill() const { return textFill; }
   void setTextFill(bool f) { textFill = f; }
   void resetText();
   void moveText();
   void drawText();
 
   std::wstring getStatusMessage();
+
+  // From https://bottosson.github.io/posts/oklab/, type names changed slightly to avoid clashes.
+  static csLab linear_srgb_to_oklab(csRGB c);
+  static csLab srgb_to_oklab(csRGB c);
+  static csRGB oklab_to_linear_srgb(csLab c);
+  static csRGB oklab_to_srgb(csLab c);
+
+  COLORREF csRGBtoRGB(csRGB c) { return RGB((char)(255.0 * c.r), (char)(255.0 * c.g), (char)(255.0 * c.b)); }
+
+  static float gammaToLinear(float c);
+  static float linearToGamma(float c);
+
+  static float clamp(float in, float min, float max);
+
+  void writeLabValue(csLab lab);
+  void writeRgbValue(csRGB rgb);
+  //void demoOKLabValues();
 
 private:
   const int timerId = 1234;
@@ -135,6 +158,7 @@ private:
   double rx, ry, rz;
   double rotationSpeed; // radians per second
   bool integralRotation;
+  bool wireframe;
 
   // For the moving text.
   bool textEnabled, textRunning, textFill;

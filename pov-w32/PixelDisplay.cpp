@@ -35,6 +35,7 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h, int objFileId) : memdc(hWnd,
   // No cube currently shown.
   cubeEnabled = true;
   cubeRunning = false;
+  wireframe = false;
   resetCube();
 
   // No text currently shown.
@@ -81,12 +82,11 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h, int objFileId) : memdc(hWnd,
   // Pass the stream to the loader.
   objects = Object3D::loadObjFile(objectDataStream);
 
-  // Add two more objects defined directly in the Object3D class source.
-  objects.push_back(Object3D::builtIn(TETRAHEDRON));
-  objects.push_back(Object3D::builtIn(COBRA_MKIII));
-
   // Start with the cube.
   setCurrentObject(1);
+
+  // Write some diagostic information to the debug window re: the OKLab <-> RGB conversions.
+  //demoOKLabValues();
 
   startAnimation();
 
@@ -110,14 +110,29 @@ void PixelDisplay::createRainbow(int penWidth)
   //  colours.push_back(colour);
   //}
 
-  // Per a comment suggestion, try pure RGB, black and white.
-  colours.push_back(RGB(255, 0, 0));
-  colours.push_back(RGB(0, 255, 0));
-  colours.push_back(RGB(0, 0, 255));
-  colours.push_back(RGB(0, 0, 0));
-  colours.push_back(RGB(255, 255, 255));
+  //// Per a comment suggestion, try pure RGB, black and white.
+  //colours.push_back(RGB(255, 0, 0));
+  //colours.push_back(RGB(0, 255, 0));
+  //colours.push_back(RGB(0, 0, 255));
+  //colours.push_back(RGB(0, 0, 0));
+  //colours.push_back(RGB(255, 255, 255));
 
+  // Per yet more comment suggestions, try a selection of colours with similar OKLab luminance.
+  for (float lum = 1.0f; lum >= 0.2f; lum -= 0.2f) {
+    colours.push_back(csRGBtoRGB(PixelDisplay::oklab_to_srgb(csLab(lum, -0.2f, 0.2f))));
+    colours.push_back(csRGBtoRGB(PixelDisplay::oklab_to_srgb(csLab(lum, -0.1f, 0.1f))));
+    colours.push_back(csRGBtoRGB(PixelDisplay::oklab_to_srgb(csLab(lum, 0.0f,  0.0f))));
+    colours.push_back(csRGBtoRGB(PixelDisplay::oklab_to_srgb(csLab(lum, 0.0f, -0.1f))));
+    colours.push_back(csRGBtoRGB(PixelDisplay::oklab_to_srgb(csLab(lum, 0.0f, -0.2f))));
+    colours.push_back(csRGBtoRGB(PixelDisplay::oklab_to_srgb(csLab(lum, 0.1f, -0.1f))));
+    colours.push_back(csRGBtoRGB(PixelDisplay::oklab_to_srgb(csLab(lum, 0.2f, -0.2f))));
+  }
+
+  int count = 0;
   for (auto c : colours) {
+    wchar_t buf[128];
+    swprintf(buf, 128, L"Colour %2d: %3d, %3d, %3d\n", count++, GetRValue(c), GetGValue(c), GetBValue(c));
+    OutputDebugString(buf);
     pens.push_back(CreatePen(PS_SOLID, penWidth, c));
   }
 
@@ -138,6 +153,7 @@ void PixelDisplay::setCurrentPen(int i)
   if (i < 0 || i >= (int)pens.size()) return;
   currentPenIndex = i;
   SelectObject(memdc, pens[currentPenIndex]);
+  SelectObject(textdc, pens[currentPenIndex]);
 }
 
 /*
@@ -214,7 +230,7 @@ void PixelDisplay::resizeOffscreenDCs(int pixelRatio)
   // It would perhaps make more sense to base this on the actual size of the client area of the window,
   // I'm not sure why I've done it like this...
   HMONITOR hm = MonitorFromWindow(visibleHwnd, MONITOR_DEFAULTTOPRIMARY);
-  MONITORINFO mi;
+  MONITORINFO mi = { 0 };
   mi.cbSize = sizeof(MONITORINFO);
   GetMonitorInfo(hm, &mi);
   width = mi.rcWork.right / pixelRatio;
@@ -516,8 +532,8 @@ void PixelDisplay::moveCube()
   }
 
   rx += delta;
-  ry += delta;
-  rz += delta;
+  ry += delta / 2;
+  rz += delta / 3;
 
 }
 
@@ -526,9 +542,17 @@ void PixelDisplay::drawCube()
   Object3D t(currentObject);
   t.rotate(rx, ry, rz);
   t.translate(dx, dy, dz);
+
+  // Draw the object on the text DC, which doesn't XOR each edge as they're drawn, to avoid the effect
+  // where overlapping lines cancel each other out, particularly at each vertex.
+  BitBlt(textdc, 0, 0, width, height, NULL, 0, 0, BLACKNESS);
+
   // Second parameter is the distance from the viewer's eye to the virtual screen used in the projection function.
   // Setting equal to the screen's height seems to give the right 'focal length'.
-  t.draw(memdc, height, width, height);
+  t.draw(textdc, height, width, height, wireframe);
+
+  // Blit the complete object to the main off-screen DC, XORing it with whatever's already there.
+  BitBlt(memdc, 0, 0, width, height, textdc, 0, 0, SRCINVERT);
 }
 
 void PixelDisplay::translateCube(double _x, double _y, double _z)
@@ -620,11 +644,103 @@ std::wstring PixelDisplay::getStatusMessage()
   return message.str();
 }
 
-
 void PixelDisplay::addOneRandomLine() {
   // Draw a line from somewhere on the left of the screen to somewhere on the right,
   // not entirely randomly.
   int margin = width / 5;
   MoveToEx(memdc, getRandom(margin), getRandom(height), NULL);
   LineTo(memdc, width - getRandom(margin), getRandom(height));
+}
+
+void PixelDisplay::writeLabValue(csLab lab) {
+  wchar_t buffer[128];
+  swprintf(buffer, sizeof(buffer) / sizeof(wchar_t), L"  OKLab: %f, %f, %f\n", lab.L, lab.a, lab.b);
+  OutputDebugString(buffer);
+}
+
+void PixelDisplay::writeRgbValue(csRGB rgb) {
+  wchar_t buffer[128];
+  swprintf(buffer, sizeof(buffer) / sizeof(wchar_t), L"  RGB:  %f, %f, %f (%d, %d, %d)\n", rgb.r, rgb.g, rgb.b, (int)(255.0 * rgb.r), (int)(255.0 * rgb.g), (int)(255.0 * rgb.b));
+  OutputDebugString(buffer);
+}
+
+/*
+* 
+* Normal RGB as used in Win32 is gamma-corrected or sRGB. The OKLab conversion functions expect/produce linear RGB, so
+* these additional conversion functions are also needed, apparently.
+* 
+* Taken from the JavaScript example here: https://gist.github.com/earthbound19/e7fe15fdf8ca3ef814750a61bc75b5ce
+* but this does tally with the Björn Ottosson post which implies a distinction between 'sRGB' and 'linear
+* sRGB' without ever defining those terms (I assume these are just well-known to people who know about colour
+* spaces).
+* 
+const gammaToLinear = (c) = >
+c >= 0.04045 ? Math.pow((c + 0.055) / 1.055, 2.4) : c / 12.92;
+// correlary of the first " : "..then switching back" :
+const linearToGamma = (c) = >
+c >= 0.0031308 ? 1.055 * Math.pow(c, 1 / 2.4) - 0.055 : 12.92 * c;
+*/
+
+float PixelDisplay::gammaToLinear(float c) {
+  return (float) (c >= 0.04045 ? pow((c + 0.055) / 1.055, 2.4) : c / 12.92);
+}
+
+float PixelDisplay::linearToGamma(float c) {
+  return (float) (c >= 0.0031308 ? 1.055 * pow(c, 1 / 2.4) - 0.055 : 12.92 * c);
+}
+
+csLab PixelDisplay::linear_srgb_to_oklab(csRGB c)
+{
+  float l = 0.4122214708f * c.r + 0.5363325363f * c.g + 0.0514459929f * c.b;
+  float m = 0.2119034982f * c.r + 0.6806995451f * c.g + 0.1073969566f * c.b;
+  float s = 0.0883024619f * c.r + 0.2817188376f * c.g + 0.6299787005f * c.b;
+
+  float l_ = cbrtf(l);
+  float m_ = cbrtf(m);
+  float s_ = cbrtf(s);
+
+  return {
+      0.2104542553f * l_ + 0.7936177850f * m_ - 0.0040720468f * s_,
+      1.9779984951f * l_ - 2.4285922050f * m_ + 0.4505937099f * s_,
+      0.0259040371f * l_ + 0.7827717662f * m_ - 0.8086757660f * s_,
+  };
+}
+
+csLab PixelDisplay::srgb_to_oklab(csRGB c)
+{
+  return PixelDisplay::linear_srgb_to_oklab(
+    csRGB(PixelDisplay::gammaToLinear(c.r), PixelDisplay::gammaToLinear(c.g), PixelDisplay::gammaToLinear(c.b))
+  );
+}
+
+csRGB PixelDisplay::oklab_to_linear_srgb(csLab c)
+{
+  float l_ = c.L + 0.3963377774f * c.a + 0.2158037573f * c.b;
+  float m_ = c.L - 0.1055613458f * c.a - 0.0638541728f * c.b;
+  float s_ = c.L - 0.0894841775f * c.a - 1.2914855480f * c.b;
+
+  float l = l_ * l_ * l_;
+  float m = m_ * m_ * m_;
+  float s = s_ * s_ * s_;
+
+  return {
+    +4.0767416621f * l - 3.3077115913f * m + 0.2309699292f * s,
+    -1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s,
+    -0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s,
+  };
+}
+
+csRGB PixelDisplay::oklab_to_srgb(csLab c)
+{
+  auto _l = PixelDisplay::oklab_to_linear_srgb(c);
+  auto red = PixelDisplay::clamp(PixelDisplay::linearToGamma(_l.r), 0.0, 1.0);
+  auto green = PixelDisplay::clamp(PixelDisplay::linearToGamma(_l.g), 0.0, 1.0);
+  auto blue = PixelDisplay::clamp(PixelDisplay::linearToGamma(_l.b), 0.0, 1.0);
+  return csRGB(red, green, blue);
+}
+
+float PixelDisplay::clamp(float in, float min, float max) {
+  if (in < min) return min;
+  if (in > max) return max;
+  return in;
 }

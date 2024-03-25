@@ -35,13 +35,18 @@
 #define IDC_OBJECT_LIST                 1017
 #define IDC_COLOUR_RED                  1018
 #define IDC_COLOUR_HUE                  1019
+#define IDC_COLOUR_OK_L                 1019
 #define IDC_COLOUR_GREEN                1020
 #define IDC_COLOUR_SAT                  1021
+#define IDC_COLOUR_OK_A                 1021
 #define IDC_COLOUR_BLUE                 1022
 #define IDC_COLOUR_LUM                  1023
+#define IDC_COLOUR_OK_B                 1023
 #define IDC_ONE_FRAME                   1024
 #define IDC_ROTATION_SPEED              1025
 #define IDC_INTEGRAL                    1026
+#define IDC_INTEGRAL2                   1027
+#define IDC_WIREFRAME                   1027
 #define ID_FILE_CONFIGURATION           32771
 #define IDC_STATIC                      -1
 

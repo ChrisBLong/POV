@@ -129,6 +129,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Face.h" />
     <ClInclude Include="Object3D.h" />
     <ClInclude Include="Edge.h" />
     <ClInclude Include="Frame.h" />
@@ -139,9 +140,11 @@
     <ClInclude Include="pov-w32.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="Vector.h" />
     <ClInclude Include="Vertex.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Face.cpp" />
     <ClCompile Include="Object3D.cpp" />
     <ClCompile Include="Edge.cpp" />
     <ClCompile Include="Frame.cpp" />
@@ -149,6 +152,7 @@
     <ClCompile Include="OffscreenDC.cpp" />
     <ClCompile Include="PixelDisplay.cpp" />
     <ClCompile Include="pov-w32.cpp" />
+    <ClCompile Include="Vector.cpp" />
     <ClCompile Include="Vertex.cpp" />
   </ItemGroup>
   <ItemGroup>

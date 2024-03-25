@@ -1,4 +1,5 @@
 #include "Object3D.h"
+#include <algorithm>
 
 // Create an empty object.
 Object3D::Object3D() {
@@ -273,13 +274,16 @@ std::vector<Object3D> Object3D::loadObjFile(std::wistream& iStream)
 
     if (currObj && tokens[0] == L"f") {
 
-      // Process the faces. Faces are defined by three or more vertex indices. For now we don't care about faces,
-      // we just want to create Edges corresponding to the edges of each face, without duplicating Edges. Each vertex
+      // Process a face. Faces are defined by three or more vertex indices. Create Edges linking each listed
+      // vertex to the next, including an Edge from the last vertex back to the first. Each vertex
       // index might be part of a group of indices separated by slashes but we only care about the first.
       std::vector<int> indices;
 
+      // Build a list of edges to be transferred to the new Face object later.
+      std::vector<Edge> edges;
+
       for (size_t i = 1; i < numTokens; i++) {
-        auto thisToken = tokens[i];
+        std::wstring thisToken(tokens[i]);
         auto pos = thisToken.find('/');
         if (pos != std::string::npos) thisToken[pos] = '\0';
         indices.push_back(std::stoi(thisToken) - firstVertexForThisObject);
@@ -288,8 +292,11 @@ std::vector<Object3D> Object3D::loadObjFile(std::wistream& iStream)
       // Create edges from one vertex to the next, wrapping around at the end.
       for (size_t i = 0; i < indices.size(); i++) {
         auto endIndex = (i == (indices.size() - 1) ? 0 : i + 1);
-        currObj->addEdgeWithoutDuplicates(indices[i], indices[endIndex]);
+        edges.push_back(Edge(indices[i], indices[endIndex]));
       }
+
+      // Add the new Face.
+      currObj->faces.push_back(Face(edges));
 
     }
 
@@ -307,33 +314,6 @@ std::vector<Object3D> Object3D::loadObjFile(std::wistream& iStream)
   }
 
   return objList;
-}
-
-// Add a new Edge with the given start and end, but only if no such edge already exists.
-// Horribly naive implementation will do for now.
-void Object3D::addEdgeWithoutDuplicates(int start, int end)
-{
-
-  // Check the the supplied vertex indices are within the number of vertices that have been defined.
-  if (start >= (int)vertices.size()) {
-    OutputDebugString(L"Bad start vertex index!\n");
-    return;
-  }
-
-  if (end >= (int)vertices.size()) {
-    OutputDebugString(L"Bad end vertex index!\n");
-    return;
-  }
-
-  bool found = false;
-
-  for (const auto& e : edges) {
-    if (e.start == start && e.end == end) found = true;
-    if (e.start == end && e.end == start) found = true;
-  }
-
-  if (!found) edges.push_back(Edge(start, end));
-
 }
 
 Object3D& Object3D::translate(double dx, double dy, double dz) {
@@ -362,13 +342,42 @@ Object3D& Object3D::rotate(double rx, double ry, double rz) {
   return *this;
 }
 
-void Object3D::draw(HDC memdc, double zScreen, int width, int height)
+void Object3D::draw(HDC dc, double zScreen, int width, int height, bool wireframe)
 {
-  for (const auto& e : edges) {
-    auto vs = vertices[e.start].project(zScreen);
-    auto ve = vertices[e.end].project(zScreen);
-    MoveToEx(memdc, ((int)vs.x) + (width / 2), ((int)vs.y) + (height / 2), NULL);
-    LineTo(memdc, ((int)ve.x) + (width / 2), ((int)ve.y) + (height / 2));
+
+  // Get a copy of the faces vector.
+  std::vector<Face> tFaces(faces);
+
+  // Set the mean Z coordinate for each face.
+  for (auto& f : tFaces) f.setZMean(vertices);
+
+  // Sort faces so that the furthest faces get drawn first, and faces closer to
+  // the camera obscure the further ones.
+  std::ranges::sort(tFaces, [](const Face& a, const Face& b)  { return a.zMean > b.zMean; });
+
+  // Each face wll be outlined with the current pen and filled with black.
+  SetDCBrushColor(dc, RGB(0, 0, 0));
+
+  // Iterate over the sorted face vector and draw all the faces.
+  for (const auto& f : tFaces) {
+    BeginPath(dc);
+    bool first = true;
+    for (const auto& e : f.edges) {
+      if (first) {
+        auto vs = vertices[e.start].project(zScreen);
+        MoveToEx(dc, ((int)vs.x) + (width / 2), ((int)vs.y) + (height / 2), NULL);
+        first = false;
+      }
+      auto ve = vertices[e.end].project(zScreen);
+      LineTo(dc, ((int)ve.x) + (width / 2), ((int)ve.y) + (height / 2));
+    }
+    EndPath(dc);
+    if (wireframe) {
+      StrokePath(dc);
+    }
+    else {
+      StrokeAndFillPath(dc);
+    }
   }
 }
 

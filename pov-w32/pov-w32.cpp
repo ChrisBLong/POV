@@ -27,9 +27,10 @@ INT_PTR CALLBACK    ConfigProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
 void updateStatusBar();
-void updateColourSliders(HWND hDlg, PixelDisplay* pd);
+void updateColourSliders(HWND hDlg, PixelDisplay* pd, char which);
 void updatePenFromSlidersRgb(HWND hDlg, PixelDisplay* pd);
-void updatePenFromSlidersHsl(HWND hDlg, PixelDisplay* pd);
+//void updatePenFromSlidersHsl(HWND hDlg, PixelDisplay* pd);
+void updatePenFromSlidersOKLab(HWND hDlg, PixelDisplay* pd);
 void showConfigDialog(HWND hWnd);
 HWND hwndConfig = NULL;
 
@@ -85,23 +86,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 //
 ATOM MyRegisterClass(HINSTANCE hInstance)
 {
-    WNDCLASSEXW wcex;
+  WNDCLASSEXW wcex = { 0 };
 
-    wcex.cbSize = sizeof(WNDCLASSEX);
+  wcex.cbSize = sizeof(WNDCLASSEX);
 
-    wcex.style          = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc    = WndProc;
-    wcex.cbClsExtra     = 0;
-    wcex.cbWndExtra     = 0;
-    wcex.hInstance      = hInstance;
-    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_POVW32));
-    wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
-    wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
-    wcex.lpszMenuName   = MAKEINTRESOURCEW(IDC_POVW32);
-    wcex.lpszClassName  = szWindowClass;
-    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+  wcex.style          = CS_HREDRAW | CS_VREDRAW;
+  wcex.lpfnWndProc    = WndProc;
+  wcex.cbClsExtra     = 0;
+  wcex.cbWndExtra     = 0;
+  wcex.hInstance      = hInstance;
+  wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_POVW32));
+  wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
+  wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
+  wcex.lpszMenuName   = MAKEINTRESOURCEW(IDC_POVW32);
+  wcex.lpszClassName  = szWindowClass;
+  wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
-    return RegisterClassExW(&wcex);
+  return RegisterClassExW(&wcex);
 }
 
 //
@@ -292,24 +293,42 @@ void updateStatusBar() {
   SendMessage(hwndStatus, SB_SETTEXT, 0, (LPARAM)pd->getStatusMessage().c_str());
 }
 
-void updateColourSliders(HWND hDlg, PixelDisplay* pd)
+void updateColourSliders(HWND hDlg, PixelDisplay* pd, char which)
 {
   // Get the color of the current pen.
   COLORREF col = pd->getCurrentPenColour();
 
-  // Updating the RGB sliders is easy.
-  SendMessage(GetDlgItem(hDlg, IDC_COLOUR_RED), TBM_SETPOS, TRUE, (LPARAM)GetRValue(col));
-  SendMessage(GetDlgItem(hDlg, IDC_COLOUR_GREEN), TBM_SETPOS, TRUE, (LPARAM)GetGValue(col));
-  SendMessage(GetDlgItem(hDlg, IDC_COLOUR_BLUE), TBM_SETPOS, TRUE, (LPARAM)GetBValue(col));
+  if (which == 'R' || which == 'A') {
+    // Updating the RGB sliders is easy.
+    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_RED), TBM_SETPOS, TRUE, (LPARAM)GetRValue(col));
+    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_GREEN), TBM_SETPOS, TRUE, (LPARAM)GetGValue(col));
+    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_BLUE), TBM_SETPOS, TRUE, (LPARAM)GetBValue(col));
+  }
 
-  // Get the HLS values for this colour.
-  WORD h, l, s;
-  ColorRGBToHLS(col, &h, &l, &s);
+  //// Get the HLS values for this colour.
+  //WORD h, l, s;
+  //ColorRGBToHLS(col, &h, &l, &s);
 
-  // Updating the HLS sliders is also easy.
-  SendMessage(GetDlgItem(hDlg, IDC_COLOUR_HUE), TBM_SETPOS, TRUE, (LPARAM)h);
-  SendMessage(GetDlgItem(hDlg, IDC_COLOUR_SAT), TBM_SETPOS, TRUE, (LPARAM)s);
-  SendMessage(GetDlgItem(hDlg, IDC_COLOUR_LUM), TBM_SETPOS, TRUE, (LPARAM)l);
+  //// Updating the HLS sliders is also easy.
+  //SendMessage(GetDlgItem(hDlg, IDC_COLOUR_HUE), TBM_SETPOS, TRUE, (LPARAM)h);
+  //SendMessage(GetDlgItem(hDlg, IDC_COLOUR_SAT), TBM_SETPOS, TRUE, (LPARAM)s);
+  //SendMessage(GetDlgItem(hDlg, IDC_COLOUR_LUM), TBM_SETPOS, TRUE, (LPARAM)l);
+
+  if (which == 'O' || which == 'A') {
+    // Get the OKLab values for this colour.
+    float red = GetRValue(col) / 255.0f;
+    float green = GetGValue(col) / 255.0f;
+    float blue = GetBValue(col) / 255.0f;
+
+    csRGB rgb{ red, green, blue };
+    csLab lab = PixelDisplay::srgb_to_oklab(rgb);
+
+    // Convert the Lab values to fit the scaling of the sliders.
+    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_HUE), TBM_SETPOS, TRUE, (LPARAM)(lab.L * 100.0));
+    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_SAT), TBM_SETPOS, TRUE, (LPARAM)(lab.a * 100.0) + 40);
+    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_LUM), TBM_SETPOS, TRUE, (LPARAM)(lab.b * 100.0) + 40);
+  }
+
 }
 
 void updatePenFromSlidersRgb(HWND hDlg, PixelDisplay* pd)
@@ -321,13 +340,28 @@ void updatePenFromSlidersRgb(HWND hDlg, PixelDisplay* pd)
   pd->setCurrentPenColour(colour);
 }
 
-void updatePenFromSlidersHsl(HWND hDlg, PixelDisplay* pd)
+//void updatePenFromSlidersHsl(HWND hDlg, PixelDisplay* pd)
+//{
+//  auto hue = (WORD)SendMessage(GetDlgItem(hDlg, IDC_COLOUR_HUE), TBM_GETPOS, 0, 0);
+//  auto sat = (WORD)SendMessage(GetDlgItem(hDlg, IDC_COLOUR_SAT), TBM_GETPOS, 0, 0);
+//  auto lum = (WORD)SendMessage(GetDlgItem(hDlg, IDC_COLOUR_LUM), TBM_GETPOS, 0, 0);
+//  auto colour = ColorHLSToRGB(hue, lum, sat);
+//  pd->setCurrentPenColour(colour);
+//}
+
+void updatePenFromSlidersOKLab(HWND hDlg, PixelDisplay* pd)
 {
-  auto hue = (WORD)SendMessage(GetDlgItem(hDlg, IDC_COLOUR_HUE), TBM_GETPOS, 0, 0);
-  auto sat = (WORD)SendMessage(GetDlgItem(hDlg, IDC_COLOUR_SAT), TBM_GETPOS, 0, 0);
-  auto lum = (WORD)SendMessage(GetDlgItem(hDlg, IDC_COLOUR_LUM), TBM_GETPOS, 0, 0);
-  auto colour = ColorHLSToRGB(hue, lum, sat);
-  pd->setCurrentPenColour(colour);
+  auto raw_L = (WORD)SendMessage(GetDlgItem(hDlg, IDC_COLOUR_OK_L), TBM_GETPOS, 0, 0);
+  auto raw_a = (WORD)SendMessage(GetDlgItem(hDlg, IDC_COLOUR_OK_A), TBM_GETPOS, 0, 0);
+  auto raw_b = (WORD)SendMessage(GetDlgItem(hDlg, IDC_COLOUR_OK_B), TBM_GETPOS, 0, 0);
+  float L = raw_L / 100.0f;
+  float a = (raw_a - 40) / 100.0f;
+  float b = (raw_b - 40) / 100.0f;
+  csLab ok { L, a, b };
+  csRGB rgb = PixelDisplay::oklab_to_srgb(ok);
+  pd->writeLabValue(ok);
+  pd->writeRgbValue(rgb);
+  pd->setCurrentPenColour(RGB(rgb.r*255, rgb.g*255, rgb.b*255));
 }
 
 void showConfigDialog(HWND hWnd) {
@@ -339,7 +373,8 @@ void showConfigDialog(HWND hWnd) {
 }
 
 std::vector<HWND> colourSlidersRGB;
-std::vector<HWND> colourSlidersHSL;
+//std::vector<HWND> colourSlidersHSL;
+std::vector<HWND> colourSlidersOKLab;
 
 // Message handler for the configuration dialog.
 INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
@@ -368,6 +403,7 @@ INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
     Button_SetCheck(GetDlgItem(hDlg, IDC_SHOW_TEXT), pd->getTextEnabled());
     Button_SetCheck(GetDlgItem(hDlg, IDC_FILL_TEXT), pd->getTextFill());
     Button_SetCheck(GetDlgItem(hDlg, IDC_INTEGRAL), pd->getIntegralRotation());
+    Button_SetCheck(GetDlgItem(hDlg, IDC_WIREFRAME), pd->getWireframe());
 
     // Populate the text box.
     Edit_SetText(GetDlgItem(hDlg, IDC_TEXT_STRING), pd->getTextString());
@@ -395,14 +431,17 @@ INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
     SendMessage(GetDlgItem(hDlg, IDC_COLOUR_BLUE), TBM_SETRANGE, FALSE, MAKELPARAM(0, 255));
     SendMessage(GetDlgItem(hDlg, IDC_COLOUR_BLUE), TBM_SETTICFREQ, 16, 0);
 
-    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_HUE), TBM_SETRANGE, FALSE, MAKELPARAM(0, 240));
-    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_HUE), TBM_SETTICFREQ, 16, 0);
+    // OKLab lightness varies between 0 and 1.
+    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_OK_L), TBM_SETRANGE, FALSE, MAKELPARAM(0, 100));
+    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_OK_L), TBM_SETTICFREQ, 10, 0);
 
-    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_SAT), TBM_SETRANGE, FALSE, MAKELPARAM(0, 240));
-    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_SAT), TBM_SETTICFREQ, 16, 0);
+    // OKLab a varies between -0.4 and +0.4 (I think).
+    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_OK_A), TBM_SETRANGE, FALSE, MAKELPARAM(0, 80));
+    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_OK_A), TBM_SETTICFREQ, 8, 0);
 
-    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_LUM), TBM_SETRANGE, FALSE, MAKELPARAM(0, 240));
-    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_LUM), TBM_SETTICFREQ, 16, 0);
+    // OKLab b varies between -0.4 and +0.4 (I think).
+    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_OK_B), TBM_SETRANGE, FALSE, MAKELPARAM(0, 80));
+    SendMessage(GetDlgItem(hDlg, IDC_COLOUR_OK_B), TBM_SETTICFREQ, 8, 0);
 
 
     // Populate the list of HWNDs that identify the six colour sliders.
@@ -410,12 +449,12 @@ INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
     colourSlidersRGB.push_back(GetDlgItem(hDlg, IDC_COLOUR_GREEN));
     colourSlidersRGB.push_back(GetDlgItem(hDlg, IDC_COLOUR_BLUE));
 
-    colourSlidersHSL.push_back(GetDlgItem(hDlg, IDC_COLOUR_HUE));
-    colourSlidersHSL.push_back(GetDlgItem(hDlg, IDC_COLOUR_SAT));
-    colourSlidersHSL.push_back(GetDlgItem(hDlg, IDC_COLOUR_LUM));
+    colourSlidersOKLab.push_back(GetDlgItem(hDlg, IDC_COLOUR_OK_L));
+    colourSlidersOKLab.push_back(GetDlgItem(hDlg, IDC_COLOUR_OK_A));
+    colourSlidersOKLab.push_back(GetDlgItem(hDlg, IDC_COLOUR_OK_B));
 
     // Set up the sliders for the current pen.
-    updateColourSliders(hDlg, pd);
+    updateColourSliders(hDlg, pd, 'A');
 
     return (INT_PTR)TRUE;
 
@@ -448,12 +487,14 @@ INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
     if (std::find(colourSlidersRGB.begin(), colourSlidersRGB.end(), (HWND)lParam) != colourSlidersRGB.end()) {
       updatePenFromSlidersRgb(hDlg, pd);
       pd->fillWindowWithCurrentPen(hDlg, GetDlgItem(hDlg, IDC_LINE_COLOUR));
-      updateColourSliders(hDlg, pd);
+      // Update the OKLab sliders.
+      updateColourSliders(hDlg, pd, 'O');
     }
-    if (std::find(colourSlidersHSL.begin(), colourSlidersHSL.end(), (HWND)lParam) != colourSlidersHSL.end()) {
-      updatePenFromSlidersHsl(hDlg, pd);
+    if (std::find(colourSlidersOKLab.begin(), colourSlidersOKLab.end(), (HWND)lParam) != colourSlidersOKLab.end()) {
+      updatePenFromSlidersOKLab(hDlg, pd);
       pd->fillWindowWithCurrentPen(hDlg, GetDlgItem(hDlg, IDC_LINE_COLOUR));
-      updateColourSliders(hDlg, pd);
+      // Update the RGB sliders.
+      updateColourSliders(hDlg, pd, 'R');
     }
     updateStatusBar();
     break;
@@ -490,6 +531,10 @@ INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
         updateStatusBar();
         return (INT_PTR)TRUE;
       }
+      if (LOWORD(wParam) == IDC_WIREFRAME) {
+        pd->setWireframe(Button_GetCheck(GetDlgItem(hDlg, IDC_WIREFRAME)));
+        return (INT_PTR)TRUE;
+      }
       if (LOWORD(wParam) == IDC_ONE_FRAME) {
         pd->stopAnimation();
         pd->nextFrame();
@@ -500,7 +545,7 @@ INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
     if (HIWORD(wParam) == EN_CHANGE) {
       if (LOWORD(wParam) == IDC_TEXT_STRING) {
         wchar_t buffer[128];
-        Edit_GetText(GetDlgItem(hDlg, IDC_TEXT_STRING), buffer, sizeof(buffer));
+        Edit_GetText(GetDlgItem(hDlg, IDC_TEXT_STRING), buffer, sizeof(buffer)/sizeof(wchar_t));
         pd->setTextString(buffer);
         return (INT_PTR)TRUE;
       }
@@ -545,14 +590,14 @@ INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
       pd->nextPen();
       // Update the dialog.
       pd->fillWindowWithCurrentPen(hDlg, GetDlgItem(hDlg, IDC_LINE_COLOUR));
-      updateColourSliders(hDlg, pd);
+      updateColourSliders(hDlg, pd, 'A');
       updateStatusBar();
       return (INT_PTR)TRUE;
     case IDC_PREV_COLOUR:
       pd->prevPen();
       // Update the dialog.
       pd->fillWindowWithCurrentPen(hDlg, GetDlgItem(hDlg, IDC_LINE_COLOUR));
-      updateColourSliders(hDlg, pd);
+      updateColourSliders(hDlg, pd, 'A');
       updateStatusBar();
       return (INT_PTR)TRUE;
     }
