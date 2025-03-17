@@ -150,8 +150,12 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 }
 
 PixelDisplay* pd;
-int m_width = 1920 / 5;
-int m_height = 1080 / 5;
+int m_width = 1920 / 1;
+int m_height = 1080 / 1;
+
+// For the vertical POV-Halloween video.
+//int m_width = 1080 / 4;
+//int m_height = 1920 / 4;
 
 //
 //  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)

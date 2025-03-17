@@ -14,7 +14,7 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h, int objFileId) : memdc(hWnd,
   srand((unsigned)memdc.getDC());
 
   // Create a selection of pens in different colours, one pixel wide.
-  penWidth = 0;
+  penWidth = 8;
   createRainbow(penWidth);
   setCurrentPen(0);
 
@@ -33,13 +33,13 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h, int objFileId) : memdc(hWnd,
   ve_x = ve_y = 0;
 
   // No cube currently shown.
-  cubeEnabled = true;
+  cubeEnabled = false;
   cubeRunning = false;
   wireframe = false;
   resetCube();
 
   // No text currently shown.
-  textEnabled = true;
+  textEnabled = false;
   textRunning = false;
   textFill = false;
   textPos.x = textPos.y = 0;
@@ -49,6 +49,10 @@ PixelDisplay::PixelDisplay(HWND hWnd, int w, int h, int objFileId) : memdc(hWnd,
   // Load the Bad Apple frames.
   //frameSet.loadFrames(L"E:\\Video Editing\\Bad Apple\\frames\\outline-only\\image%04d.png", 6538);
   //frameSet.loadFrames(L"E:\\Video Editing\\Bad Apple\\frames\\full-shapes\\image%04d.png", 6538);
+  //frameSet.reset();
+
+  // Load the POV-Halloween frames.
+  //frameSet.loadFrames(L"E:\\Video Editing\\POV-Halloween\\frames\\out-%04d.png", 225);
   //frameSet.reset();
 
   // Run through all the frames and save the outputs.
@@ -130,9 +134,9 @@ void PixelDisplay::createRainbow(int penWidth)
 
   int count = 0;
   for (auto c : colours) {
-    wchar_t buf[128];
-    swprintf(buf, 128, L"Colour %2d: %3d, %3d, %3d\n", count++, GetRValue(c), GetGValue(c), GetBValue(c));
-    OutputDebugString(buf);
+    //wchar_t buf[128];
+    //swprintf(buf, 128, L"Colour %2d: %3d, %3d, %3d\n", count++, GetRValue(c), GetGValue(c), GetBValue(c));
+    //OutputDebugString(buf);
     pens.push_back(CreatePen(PS_SOLID, penWidth, c));
   }
 
@@ -272,7 +276,7 @@ Image* PixelDisplay::imageFromMemDc(Image* templateFrame) {
 
 void PixelDisplay::processAllFrames() {
 
-  //return;
+  return;
 
   wchar_t filename[MAX_PATH];
   wchar_t message[256];
@@ -293,7 +297,7 @@ void PixelDisplay::processAllFrames() {
     BitBlt(memdc, 0, 0, width, height, textdc, 0, 0, SRCINVERT);
     thisFrame = imageFromMemDc(frameSet.templateFrame());
 
-    wsprintf(filename, L"E:\\Video Editing\\Bad Apple\\outputFrames\\out%06d.png", framesProcessed);
+    wsprintf(filename, L"E:\\Video Editing\\POV-Halloween\\outputFrames\\out%06d.png", framesProcessed);
     auto result = thisFrame->Save(filename, &pngClsid);
 
     delete thisFrame;
@@ -467,15 +471,27 @@ void PixelDisplay::resetLine()
 
   if (fraction == 0) fraction = 1;
 
-  start.x = fraction;
-  start.y = 0;
-  vs_x = getRandom(fraction) + 1;
-  vs_y = getRandom(fraction) + 1;
+  //start.x = fraction;
+  //start.y = 0;
+  //vs_x = getRandom(fraction) + 1;
+  //vs_y = getRandom(fraction) + 1;
 
-  end.x = 0;
-  end.y = 5;
-  ve_x = getRandom(fraction) + 1;
-  ve_y = getRandom(fraction) + 1;
+  auto step = 25;
+
+  start.x = 0;
+  start.y = step;
+  vs_x = step;
+  vs_y = step;
+
+  //end.x = 0;
+  //end.y = 5;
+  //ve_x = getRandom(fraction) + 1;
+  //ve_y = getRandom(fraction) + 1;
+
+  end.x = step;
+  end.y = 0;
+  ve_x = step;
+  ve_y = step;
 }
 
 void PixelDisplay::moveLine()
@@ -486,11 +502,31 @@ void PixelDisplay::moveLine()
   end.x += ve_x;
   end.y += ve_y;
 
+  auto playIt = false;
+  static auto delayFrames = 0;
+  static auto nextSound = 0;
+
+  const wchar_t* sounds[] = {
+    L"C:\\Users\\chris\\source\\repos\\POV\\pov-w32\\assets\\tone-short.wav",
+    L"C:\\Users\\chris\\source\\repos\\POV\\pov-w32\\assets\\tone-short1.wav",
+    L"C:\\Users\\chris\\source\\repos\\POV\\pov-w32\\assets\\tone-short2.wav"
+  };
+  constexpr auto numSounds = sizeof(sounds) / sizeof(wchar_t*);
+
   // Bounce the endpoints if they reach the edge of the window.
-  if (start.x < 0 || start.x > width) vs_x = -vs_x;
-  if (start.y < 0 || start.y > height) vs_y = -vs_y;
-  if (end.x < 0 || end.x > width) ve_x = -ve_x;
-  if (end.y < 0 || end.y > height) ve_y = -ve_y;
+  if (start.x < 0 || start.x > width) { vs_x = -vs_x; playIt = true; }
+  if (start.y < 0 || start.y > height) { vs_y = -vs_y; playIt = true; }
+  if (end.x < 0 || end.x > width)      { ve_x = -ve_x; playIt = true; }
+  if (end.y < 0 || end.y > height)     { ve_y = -ve_y; playIt = true; }
+
+  if (delayFrames == 0 && playIt) {
+    PlaySound(sounds[nextSound], NULL, SND_FILENAME | SND_ASYNC);
+    delayFrames = 4;
+    nextSound = ++nextSound % numSounds;
+  }
+  else {
+    if (delayFrames > 0) delayFrames--;
+  }
 
 }
 

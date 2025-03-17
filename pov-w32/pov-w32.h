@@ -11,3 +11,4 @@ using namespace Gdiplus;
 
 #pragma comment (lib,"Gdiplus.lib")
 #pragma comment(lib,"comctl32.lib")
+#pragma comment(lib,"winmm.lib")

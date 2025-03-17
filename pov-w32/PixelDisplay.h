@@ -9,6 +9,8 @@ using namespace Gdiplus;
 
 #include <string>
 #include <math.h>
+#include <ranges>
+#include <numbers>
 
 #include "OffscreenDC.h"
 #include "Object3D.h"

@@ -2,8 +2,12 @@
 
 FrameSet::FrameSet()
 {
+
   // Load a 1920*1080 template PNG as a starting point for the output frames.
-  hdTemplate = Frame(L"E:\\Video Editing\\Bad Apple\\hd-template.png");
+  //hdTemplate = Frame(L"E:\\Video Editing\\Bad Apple\\hd-template.png");
+
+  // Load a 1080*1920 template vertical PNG as a starting point for the output frames.
+  hdTemplate = Frame(L"E:\\Video Editing\\POV-Halloween\\hd-template.png");
 }
 
 void FrameSet::loadFrames(std::wstring baseFilename, int numFrames) {
